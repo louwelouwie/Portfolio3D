@@ -3,6 +3,6 @@ node_modules
 .npm-cache
 build
 package-lock.json
-static/test-website.html
-static/oldwebsite.html
+references/test-website.html
+references/oldwebsite.html
 static/models

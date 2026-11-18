@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 .portfolio-window {
-	min-width: 420px;
+	min-width: min(420px, 100vw);
 	min-height: 280px;
 }
 .portfolio-window.maximized {
@@ -10,6 +10,7 @@
 .resize-handle {
 	position: absolute;
 	z-index: 20;
+	touch-action: none;
 }
 .resize-handle.t,
 .resize-handle.b {

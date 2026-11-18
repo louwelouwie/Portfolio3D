@@ -1,19 +1,65 @@
 <script lang="ts">
+	import PortfolioContent from '#lib/components/PortfolioContent.svelte';
+	import { windowToIcon } from '#lib/desktop/windowToIcon.js';
+	import { copy, type Language } from '#lib/language.js';
 	type Rectangle = { x: number; y: number; width: number; height: number };
 	type Gesture = { kind: 'drag' | 'resize'; edge: string; x: number; y: number; rect: Rectangle };
+	const taskbarHeight = 48;
+	const titlebarHeight = 48;
+	const visibleWidth = 144;
 
 	let {
 		darkMode,
+		language,
+		maximized,
+		onMaximizedChange,
 		onClose,
 		onMinimize
-	}: { darkMode: boolean; onClose: () => void; onMinimize: () => void } = $props();
-	let maximized = $state(true);
-	let rect = $state<Rectangle>({ x: 100, y: 80, width: 740, height: 520 });
-	let gesture: Gesture | undefined;
+	}: {
+		darkMode: boolean;
+		language: Language;
+		maximized: boolean;
+		onMaximizedChange: (value: boolean) => void;
+		onClose: () => void;
+		onMinimize: () => void;
+	} = $props();
+	let t = $derived(copy[language]);
+	function centeredRect(): Rectangle {
+		const width = Math.min(740, Math.max(Math.min(420, window.innerWidth), window.innerWidth - 40));
+		const height = Math.min(520, Math.max(280, window.innerHeight - 88));
+		return {
+			x: Math.max(0, (window.innerWidth - width) / 2),
+			y: Math.max(0, (window.innerHeight - taskbarHeight - height) / 2),
+			width,
+			height
+		};
+	}
+	function keepTitlebarInFrame(next: Rectangle): Rectangle {
+		const visible = Math.min(visibleWidth, window.innerWidth);
+		return {
+			...next,
+			x: Math.max(visible - next.width, Math.min(next.x, window.innerWidth - visible)),
+			y: Math.max(0, Math.min(next.y, window.innerHeight - taskbarHeight - titlebarHeight))
+		};
+	}
+	let rect = $state<Rectangle>(centeredRect());
+	let gesture = $state<Gesture>();
 
 	function startGesture(event: PointerEvent, kind: Gesture['kind'], edge = '') {
-		if (maximized || (event.target as HTMLElement).closest('button')) return;
-		gesture = { kind, edge, x: event.clientX, y: event.clientY, rect: { ...rect } };
+		if ((maximized && kind === 'resize') || (event.target as HTMLElement).closest('button')) return;
+		let startRect = rect;
+		if (maximized) {
+			const restored = centeredRect();
+			const fraction = Math.max(0.1, Math.min(event.clientX / window.innerWidth, 0.9));
+			startRect = keepTitlebarInFrame({
+				...restored,
+				x: event.clientX - restored.width * fraction,
+				y: event.clientY - titlebarHeight / 2
+			});
+			rect = startRect;
+			onMaximizedChange(false);
+		}
+		gesture = { kind, edge, x: event.clientX, y: event.clientY, rect: { ...startRect } };
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 		event.preventDefault();
 	}
@@ -46,139 +92,98 @@
 				next.height = 280;
 			}
 		}
-		rect = next;
+		rect = keepTitlebarInFrame(next);
 	}
 </script>
 
+<svelte:window onresize={() => (rect = keepTitlebarInFrame(rect))} />
+
 <section
-	class={`portfolio-window absolute z-40 flex flex-col overflow-hidden shadow-2xl transition-colors duration-500 ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-white text-slate-900'}`}
+	transition:windowToIcon={{ iconId: 'portfolio' }}
+	class={`portfolio-window absolute z-40 flex flex-col overflow-hidden shadow-2xl ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${gesture ? 'transition-none' : 'transition-[left,top,width,height,border-radius,background-color,color] duration-[380ms]'} ${maximized ? 'rounded-none' : 'rounded-xl'} ${darkMode ? 'bg-[#0c1d35] text-slate-50' : 'bg-white text-[#10223d]'}`}
 	class:maximized
 	style={`left:${maximized ? 0 : rect.x}px;top:${maximized ? 0 : rect.y}px;width:${maximized ? '100vw' : `${rect.width}px`};height:${maximized ? 'calc(100vh - 3rem)' : `${rect.height}px`};`}
 	onpointermove={moveGesture}
 	onpointerup={() => (gesture = undefined)}
 	onpointercancel={() => (gesture = undefined)}
-	aria-label="Portfolio window"
+	aria-label={t.portfolio}
 >
 	<header
-		class={`transition-colors duration-500 select-none ${darkMode ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-900'}`}
+		class={`border-b transition-colors duration-500 select-none ${darkMode ? 'border-blue-300/20 bg-[#17345a] text-white' : 'border-blue-200 bg-[#dceafb] text-[#10223d]'}`}
 	>
 		<div
-			class={`flex h-12 items-center gap-3 px-4 ${maximized ? 'cursor-default' : 'cursor-move'}`}
+			class={`flex h-12 touch-none items-center gap-3 px-4 ${gesture?.kind === 'drag' ? 'cursor-grabbing' : 'cursor-grab'}`}
 			onpointerdown={(event) => startGesture(event, 'drag')}
 			role="toolbar"
 			tabindex="-1"
-			aria-label="Portfolio window controls"
+			aria-label={t.portfolio}
 		>
-			<span class="font-semibold">Portfolio</span>
+			<span class="text-sm font-bold tracking-wide">{t.portfolio}</span>
 			<div class="ml-auto flex gap-1">
 				<button
 					type="button"
 					onclick={onMinimize}
-					aria-label="Minimize portfolio"
-					class="cursor-pointer rounded px-3 py-1 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-white"
-					>−</button
+					aria-label={t.minimizePortfolio}
+					class={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-blue-500 ${darkMode ? 'hover:bg-blue-300/20' : 'hover:bg-blue-100'}`}
+					><svg
+						aria-hidden="true"
+						class="h-4 w-4"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"><path d="M5 12h14" /></svg
+					></button
 				>
 				<button
 					type="button"
-					onclick={() => (maximized = !maximized)}
-					aria-label={maximized ? 'Restore portfolio window' : 'Maximize portfolio window'}
-					class="cursor-pointer rounded px-3 py-1 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-white"
-					>□</button
+					onclick={() => onMaximizedChange(!maximized)}
+					aria-label={maximized ? t.restorePortfolio : t.maximizePortfolio}
+					class={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-blue-500 ${darkMode ? 'hover:bg-blue-300/20' : 'hover:bg-blue-100'}`}
+					><svg
+						aria-hidden="true"
+						class="h-4 w-4"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2" /></svg
+					></button
 				>
 				<button
 					type="button"
 					onclick={onClose}
-					aria-label="Close portfolio"
-					class="cursor-pointer rounded px-3 py-1 hover:bg-red-600 focus-visible:outline-2 focus-visible:outline-white"
-					>×</button
+					aria-label={t.closePortfolio}
+					class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md hover:bg-red-600 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-500"
+					><svg
+						aria-hidden="true"
+						class="h-4 w-4"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"><path d="M6 6l12 12M18 6 6 18" /></svg
+					></button
 				>
 			</div>
 		</div>
 		<div
-			class={`flex h-10 items-center gap-3 px-4 text-sm ${darkMode ? 'bg-slate-900' : 'bg-slate-100'}`}
+			class={`flex h-10 items-center gap-3 px-4 text-sm ${darkMode ? 'bg-[#0a1c36]' : 'bg-[#eff6ff]'}`}
 		>
-			<span aria-hidden="true">⌂</span>
+			<svg
+				aria-hidden="true"
+				class={`h-4 w-4 shrink-0 ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"><path d="m3 10 9-7 9 7v10H3z" /><path d="M9 20v-6h6v6" /></svg
+			>
 			<span
-				class={`min-w-0 flex-1 truncate rounded-lg px-3 py-1 ${darkMode ? 'bg-slate-700' : 'bg-white'}`}
+				class={`min-w-0 flex-1 truncate rounded-md border px-3 py-1 font-medium ${darkMode ? 'border-blue-300/20 bg-[#254467] text-blue-50' : 'border-blue-100 bg-white text-[#203c62]'}`}
 				>c-louwerse.com / portfolio</span
 			>
 		</div>
 	</header>
 
-	<div class="min-h-0 flex-1 overflow-auto scroll-smooth">
-		<nav
-			aria-label="Portfolio sections"
-			class={`sticky top-0 z-10 flex flex-wrap items-center gap-x-6 gap-y-2 px-6 py-4 shadow-sm transition-colors duration-500 sm:px-10 ${darkMode ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`}
-		>
-			<a href="#home" class="mr-auto text-xl font-bold">Portfolio</a>
-			<a href="#about" class="hover:text-blue-600 focus-visible:underline">About</a>
-			<a href="#skills" class="hover:text-blue-600 focus-visible:underline">Skills</a>
-			<a href="#projects" class="hover:text-blue-600 focus-visible:underline">Projects</a>
-		</nav>
-		<section
-			id="home"
-			class={`grid min-h-[320px] gap-10 px-6 py-16 transition-colors duration-500 md:grid-cols-2 md:px-12 ${darkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}
-		>
-			<div>
-				<h1 class="text-5xl leading-tight font-bold">
-					Chris <span class={darkMode ? 'text-blue-400' : 'text-blue-700'}>Louwerse</span>
-				</h1>
-				<p class="mt-4 text-2xl">Software Developer</p>
-			</div>
-			<div>
-				<h2 class={`text-3xl font-semibold ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>
-					Welcome
-				</h2>
-				<p class="mt-4 text-lg leading-relaxed">
-					I build web experiences and software. This portfolio is a work in progress, starting with
-					the interactive 3D laptop you just explored.
-				</p>
-			</div>
-		</section>
-		<section
-			id="about"
-			class={`px-6 py-14 transition-colors duration-500 md:px-12 ${darkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}`}
-		>
-			<h2 class={`text-3xl font-semibold ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>
-				About me
-			</h2>
-			<p class="mt-4 max-w-3xl text-lg leading-relaxed">
-				I’m Chris Louwerse, a software developer interested in web development and interactive
-				interfaces. I’m using this space to share the projects I build and what I learn along the
-				way.
-			</p>
-		</section>
-		<section
-			id="skills"
-			class={`px-6 py-14 transition-colors duration-500 md:px-12 ${darkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}
-		>
-			<h2 class={`text-3xl font-semibold ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>
-				Skills used here
-			</h2>
-			<ul class="mt-5 flex flex-wrap gap-3">
-				{#each ['SvelteKit', 'TypeScript', 'Three.js', 'Tailwind CSS'] as skill (skill)}
-					<li class={`rounded-full px-4 py-2 ${darkMode ? 'bg-slate-700' : 'bg-slate-200'}`}>
-						{skill}
-					</li>
-				{/each}
-			</ul>
-		</section>
-		<section
-			id="projects"
-			class={`px-6 py-14 transition-colors duration-500 md:px-12 ${darkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}`}
-		>
-			<h2 class={`text-3xl font-semibold ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>
-				Projects
-			</h2>
-			<article class={`mt-5 max-w-xl rounded-xl p-6 ${darkMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
-				<h3 class="text-2xl font-semibold">3D Portfolio</h3>
-				<p class="mt-3 leading-relaxed">
-					An interactive portfolio experiment built with SvelteKit and Three.js. The laptop screen
-					contains this portfolio page.
-				</p>
-			</article>
-		</section>
-	</div>
+	<PortfolioContent {darkMode} {language} />
+
 	{#if !maximized}
 		{#each ['t', 'b', 'l', 'r', 'tl', 'tr', 'bl', 'br'] as edge (edge)}
 			<div

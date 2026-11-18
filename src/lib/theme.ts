@@ -1,10 +1,10 @@
-export const themeStorageKey = 'portfolio-theme';
+export const themeStorageKey = 'portfolio-outer-theme';
 
 export function readDarkMode() {
 	try {
-		return localStorage.getItem(themeStorageKey) !== 'light';
+		return localStorage.getItem(themeStorageKey) === 'dark';
 	} catch {
-		return true;
+		return false;
 	}
 }
 
