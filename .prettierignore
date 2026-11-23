@@ -1,0 +1,8 @@
+node_modules
+.svelte-kit
+.npm-cache
+build
+package-lock.json
+references/test-website.html
+references/oldwebsite.html
+static/models
