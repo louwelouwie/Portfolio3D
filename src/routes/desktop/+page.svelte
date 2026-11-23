@@ -25,10 +25,9 @@
 	const darkMode = false;
 	let language = $state<Language>('en');
 	let t = $derived(copy[language]);
-	let iconPositions = $state<Record<'bin' | 'game' | 'portfolio', IconPosition>>({
+	let iconPositions = $state<Record<'bin' | 'portfolio', IconPosition>>({
 		bin: { x: 24, y: 24 },
-		game: { x: 140, y: 24 },
-		portfolio: { x: 256, y: 24 }
+		portfolio: { x: 140, y: 24 }
 	});
 	let windowOpen = $state(!page.url.searchParams.has('closed'));
 	let minimized = $state(false);
@@ -40,7 +39,7 @@
 		language = readLanguage();
 		const occupied: (IconPosition & { width: number; height: number })[] = [];
 		const next = { ...iconPositions };
-		for (const id of ['bin', 'game', 'portfolio'] as const) {
+		for (const id of ['bin', 'portfolio'] as const) {
 			const position = placeIcon(readIconPosition(id) ?? iconPositions[id], occupied, {
 				width: window.innerWidth,
 				height: window.innerHeight - 48
@@ -70,12 +69,6 @@
 	const openPortfolio = () => {
 		windowOpen = true;
 		minimized = false;
-	};
-	const openGame = () => {
-		const gamePath = resolve('/game');
-		// The pathname is resolved before adding the embedded-view query.
-		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		void goto(`${gamePath}${embedded ? '?embedded=1' : ''}`);
 	};
 	const togglePortfolio = () => {
 		if (windowOpen && !minimized) {
@@ -130,16 +123,6 @@
 				{darkMode}
 				startX={iconPositions.bin.x}
 				startY={iconPositions.bin.y}
-			/>
-			<DesktopIcon
-				id="game"
-				label={t.game}
-				dragHint={t.dragHint}
-				image={asset('game.png')}
-				{darkMode}
-				startX={iconPositions.game.x}
-				startY={iconPositions.game.y}
-				onActivate={openGame}
 			/>
 			<DesktopIcon
 				id="portfolio"

@@ -6,20 +6,23 @@
 </script>
 
 <header
-	class={`pointer-events-none z-10 mx-auto mt-16 flex w-[min(30rem,calc(100%-3.5rem))] flex-col items-center justify-center self-center transition-[translate,opacity] duration-500 ease-out sm:left-10 lg:top-10 ${focused ? '-translate-y-4 opacity-0' : 'translate-y-0 opacity-100'} ${darkMode ? 'text-white' : 'text-[#10223d]'}`}
+	class={`pointer-events-none z-10 mx-auto mt-16 flex w-[min(30rem,calc(100%-3.5rem))] flex-col items-center justify-center self-center transition-[translate,opacity,color] duration-500 ease-out sm:left-10 lg:top-10 ${focused ? '-translate-y-4 opacity-0' : 'translate-y-0 opacity-100'} ${darkMode ? 'text-white' : 'text-[#10223d]'}`}
 >
 	<p
-		class={`text-center text-xs font-bold tracking-[0.24em] uppercase ${darkMode ? 'text-blue-300' : 'text-blue-800'}`}
+		class={`text-center text-xs font-bold tracking-[0.24em] uppercase transition-colors duration-500 ${darkMode ? 'text-blue-300' : 'text-blue-800'}`}
 	>
 		{t.role}
 	</p>
 	<h1
 		class="mt-3 text-center text-5xl leading-[0.98] font-extrabold tracking-tight drop-shadow-sm sm:text-6xl"
 	>
-		Chris <span class={darkMode ? 'text-blue-300' : 'text-blue-700'}>Louwerse</span>
+		Chris <span
+			class={`transition-colors duration-500 ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}
+			>Louwerse</span
+		>
 	</h1>
 	<p
-		class={`mt-5 max-w-md text-center text-xl leading-snug font-semibold sm:text-2xl ${darkMode ? 'text-white' : 'text-[#142b4b]'}`}
+		class={`mt-5 max-w-md text-center text-xl leading-snug font-semibold transition-colors duration-500 sm:text-2xl ${darkMode ? 'text-white' : 'text-[#142b4b]'}`}
 	>
 		{t.heroLine}
 	</p>

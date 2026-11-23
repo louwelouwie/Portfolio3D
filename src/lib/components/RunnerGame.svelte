@@ -14,7 +14,7 @@
 		type RunnerState
 	} from '#lib/game/runner.js';
 
-	let { language }: { language: Language } = $props();
+	let { language, compact = false }: { language: Language; compact?: boolean } = $props();
 	let t = $derived(copy[language]);
 	let canvas: HTMLCanvasElement;
 	let phase = $state<GamePhase>('ready');
@@ -139,11 +139,15 @@
 	});
 </script>
 
-<section class="w-full max-w-4xl" aria-label={t.runnerTitle}>
-	<div class="mb-4 flex items-end justify-between gap-4 text-[#10223d]">
+<section class={`w-full ${compact ? 'max-w-none' : 'max-w-4xl'}`} aria-label={t.runnerTitle}>
+	<div class={`flex items-end justify-between gap-4 text-[#10223d] ${compact ? 'mb-2' : 'mb-4'}`}>
 		<div>
-			<h1 class="text-3xl font-bold tracking-tight sm:text-4xl">{t.runnerTitle}</h1>
-			<p class="mt-1 text-sm text-slate-600 sm:text-base">{t.runnerIntro}</p>
+			<h1 class={`font-bold tracking-tight ${compact ? 'text-2xl' : 'text-3xl sm:text-4xl'}`}>
+				{t.runnerTitle}
+			</h1>
+			<p class={compact ? 'sr-only' : 'mt-1 text-sm text-slate-600 sm:text-base'}>
+				{t.runnerIntro}
+			</p>
 		</div>
 		<div class="shrink-0 text-right font-mono text-sm font-semibold sm:text-base">
 			<p>{t.runnerScore} {String(score).padStart(4, '0')}</p>
@@ -184,6 +188,6 @@
 			</div>
 		{/if}
 	</div>
-	<p class="mt-4 text-center text-sm text-slate-600">{t.runnerControls}</p>
+	<p class={compact ? 'sr-only' : 'mt-4 text-center text-sm text-slate-600'}>{t.runnerControls}</p>
 	<span class="sr-only" aria-live="polite">{phase === 'over' ? t.runnerOver : ''}</span>
 </section>

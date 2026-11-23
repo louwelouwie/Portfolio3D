@@ -1,8 +1,8 @@
 type Point = { x: number; y: number };
 export type ScreenQuad = readonly [Point, Point, Point, Point];
 
-/** Map an iframe rectangle onto the four projected corners of the laptop screen. */
-export function projectIframeToQuad(
+/** Map an HTML element onto four projected corners. */
+export function projectElementToQuad(
 	[topLeft, topRight, bottomRight, bottomLeft]: ScreenQuad,
 	width: number,
 	height: number

@@ -2,11 +2,11 @@ export function createLampSound() {
 	let context: AudioContext | undefined;
 
 	return {
-		play(turningOn: boolean) {
+		async play(turningOn: boolean) {
 			try {
 				context ??= new AudioContext();
-				void context.resume();
-				const start = context.currentTime;
+				if (context.state !== 'running') await context.resume();
+				const start = context.currentTime + 0.005;
 				const length = Math.ceil(context.sampleRate * 0.065);
 				const buffer = context.createBuffer(1, length, context.sampleRate);
 				const samples = buffer.getChannelData(0);

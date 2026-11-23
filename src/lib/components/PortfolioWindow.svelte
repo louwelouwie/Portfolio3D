@@ -44,6 +44,7 @@
 	}
 	let rect = $state<Rectangle>(centeredRect());
 	let gesture = $state<Gesture>();
+	let hoveredAction = $state<'minimize' | 'resize' | null>(null);
 
 	function startGesture(event: PointerEvent, kind: Gesture['kind'], edge = '') {
 		if ((maximized && kind === 'resize') || (event.target as HTMLElement).closest('button')) return;
@@ -123,8 +124,15 @@
 				<button
 					type="button"
 					onclick={onMinimize}
+					onpointerenter={() => (hoveredAction = 'minimize')}
+					onmousemove={() => (hoveredAction = 'minimize')}
+					onpointerleave={() => (hoveredAction = null)}
+					onfocus={() => (hoveredAction = 'minimize')}
+					onblur={() => (hoveredAction = null)}
 					aria-label={t.minimizePortfolio}
-					class={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-blue-500 ${darkMode ? 'hover:bg-blue-300/20' : 'hover:bg-blue-100'}`}
+					title={t.minimizePortfolio}
+					class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md transition-[background-color,color,scale] duration-200 focus-visible:outline-2 focus-visible:outline-blue-500"
+					style={`background-color:${hoveredAction === 'minimize' ? (darkMode ? '#355e91' : '#2563eb') : 'transparent'};color:${hoveredAction === 'minimize' ? 'white' : 'inherit'};scale:${hoveredAction === 'minimize' ? '1.1' : '1'};`}
 					><svg
 						aria-hidden="true"
 						class="h-4 w-4"
@@ -137,8 +145,15 @@
 				<button
 					type="button"
 					onclick={() => onMaximizedChange(!maximized)}
+					onpointerenter={() => (hoveredAction = 'resize')}
+					onmousemove={() => (hoveredAction = 'resize')}
+					onpointerleave={() => (hoveredAction = null)}
+					onfocus={() => (hoveredAction = 'resize')}
+					onblur={() => (hoveredAction = null)}
 					aria-label={maximized ? t.restorePortfolio : t.maximizePortfolio}
-					class={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-md focus-visible:outline-2 focus-visible:outline-blue-500 ${darkMode ? 'hover:bg-blue-300/20' : 'hover:bg-blue-100'}`}
+					title={maximized ? t.restorePortfolio : t.maximizePortfolio}
+					class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md transition-[background-color,color,scale] duration-200 focus-visible:outline-2 focus-visible:outline-blue-500"
+					style={`background-color:${hoveredAction === 'resize' ? (darkMode ? '#355e91' : '#2563eb') : 'transparent'};color:${hoveredAction === 'resize' ? 'white' : 'inherit'};scale:${hoveredAction === 'resize' ? '1.1' : '1'};`}
 					><svg
 						aria-hidden="true"
 						class="h-4 w-4"
@@ -152,7 +167,7 @@
 					type="button"
 					onclick={onClose}
 					aria-label={t.closePortfolio}
-					class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md hover:bg-red-600 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-500"
+					class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md transition-colors duration-200 hover:bg-red-600 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-500"
 					><svg
 						aria-hidden="true"
 						class="h-4 w-4"

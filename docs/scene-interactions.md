@@ -14,7 +14,7 @@ Separate named roots are useful for hover, click, lift, and shadows regardless o
 
 ## Add an object
 
-1. In Blender, add a top-level object or parent named `Notebook`, place it on the desk, and export `desk-setup.glb` again. Keep the names `Desk`, `Laptop_Base`, `Laptop_Screen`, `Lamp_Base`, and `Lamp_Bulb` for the existing scene behavior.
+1. In Blender, add a top-level object or parent named `Notebook`, place it on the desk, and export `desk-setup.glb` again. Keep the names `Desk`, `Laptop_Base`, `Laptop_Screen`, `Phone_Base`, `Phone_Screen`, `Embedded_Base`, `Embedded_Screen`, `Lamp_Base`, `Lamp_Bulb`, `Headphone`, `HeadphoneStand`, `Cardholder_Base`, and `Card` for the existing scene behavior.
 2. Find the object after the model loads, next to `desk.getObjectByName('Lamp_Base')`:
 
    ```ts
@@ -45,3 +45,7 @@ notebook.position.y = startY + notebookLift;
 ```
 
 Declare `notebookLift` outside the render loop, as the laptop's `lift` is. If the tooltip is attached to the object's top, include the lift in its anchor. The amount `0.01` is in scene units; adjust it by eye for the object's size. Try the hover and click in both light and dark mode and at the laptop's focused camera angle, because nearby meshes can intercept the raycast.
+
+## Edit the contact card
+
+All three card faces use the markup in `src/lib/components/ContactCard.svelte`. The wrapper in `src/routes/+page.svelte` sets the layout width with `w-[450px]`. Its height comes from the proportions of each mesh, so the card content can fill it with `w-full h-full`. Replace the `CL` placeholder with your photo and update the example links in `src/lib/contact.ts`. Clicking the holder brings the front card forward, where its links become interactive.

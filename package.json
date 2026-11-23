@@ -39,6 +39,7 @@
 		"vite": "^8.3.5"
 	},
 	"dependencies": {
+		"suncalc": "^2.1.0",
 		"three": "^0.187.0"
 	}
 }

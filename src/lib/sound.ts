@@ -2,9 +2,9 @@ export const soundStorageKey = 'portfolio-sound-enabled';
 
 export function readSoundEnabled() {
 	try {
-		return localStorage.getItem(soundStorageKey) !== 'false';
+		return localStorage.getItem(soundStorageKey) === 'true';
 	} catch {
-		return true;
+		return false;
 	}
 }
 
