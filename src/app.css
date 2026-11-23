@@ -1,5 +1,11 @@
 @import 'tailwindcss';
 
+html:has([data-locked-viewport]),
+body:has([data-locked-viewport]) {
+	overflow: clip;
+	overscroll-behavior: none;
+}
+
 .portfolio-window {
 	min-width: min(420px, 100vw);
 	min-height: 280px;

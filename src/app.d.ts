@@ -5,7 +5,9 @@ declare global {
 		// interface Error {}
 		// interface Locals {}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			deskFocus?: import('#lib/scene/createPortfolioScene.js').FocusTarget;
+		}
 		// interface Platform {}
 	}
 }

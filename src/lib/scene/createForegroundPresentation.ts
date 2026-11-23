@@ -6,7 +6,7 @@ export function createForegroundPresentation(
 	mesh: THREE.Mesh,
 	[topLeft, topRight, bottomRight, bottomLeft]: SurfaceCorners,
 	foreground: THREE.Group,
-	{ ejectDistance = 0, verticalFill = 0.55 } = {}
+	{ ejectDistance = 0, horizontalFill = 0.82, verticalFill = 0.55 } = {}
 ) {
 	const holder = mesh.parent;
 	if (!holder) throw new Error('The foreground mesh needs a holder');
@@ -73,7 +73,7 @@ export function createForegroundPresentation(
 			const width = edge.copy(faceRight).multiply(restScale).length();
 			const height = edge.copy(faceUp).multiply(restScale).length();
 			const scale = Math.min(
-				(0.82 * viewHeight * camera.aspect) / width,
+				(horizontalFill * viewHeight * camera.aspect) / width,
 				(verticalFill * viewHeight) / height
 			);
 			targetScale.copy(restScale).multiplyScalar(scale);

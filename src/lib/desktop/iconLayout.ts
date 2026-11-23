@@ -1,7 +1,6 @@
 import type { IconPosition } from './iconPosition.js';
 
 export const iconSize = 96;
-const gap = 8;
 
 type Rectangle = IconPosition & { width: number; height: number };
 
@@ -11,7 +10,8 @@ export function placeIcon(
 	occupied: Rectangle[],
 	bounds: { width: number; height: number },
 	width = iconSize,
-	height = iconSize
+	height = iconSize,
+	gap = 8
 ): IconPosition {
 	const maxX = Math.max(0, bounds.width - width);
 	const maxY = Math.max(0, bounds.height - height);

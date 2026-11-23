@@ -16,11 +16,11 @@ type ThemeChangeOptions = { playSound?: boolean; manual?: boolean };
 
 export type PortfolioScene = {
 	enterFocus: (target: FocusTarget) => void;
+	panOverview: (direction: -1 | 1) => void;
 	getScreenQuad: (target: ScreenTarget) => ScreenQuad | null;
 	getCardProjection: (
 		name: CardMeshName
 	) => { quad: ScreenQuad; aspect: number; foreground: boolean } | null;
-	getPaperProjection: () => { quad: ScreenQuad; aspect: number } | null;
 	getForegroundMaskPath: () => string;
 	setDarkMode: (value: boolean, options?: ThemeChangeOptions) => void;
 	setSoundEnabled: (value: boolean) => void;
@@ -60,6 +60,7 @@ const CAMERA = {
 	themeDuration: 500,
 	yawLimit: 0.38,
 	pitchLimit: 0.18,
+	panLimit: 0.55,
 	cursorYaw: 0.032,
 	cursorPitch: 0.018,
 	rotationLerp: 0.08,
@@ -84,20 +85,36 @@ function getCardFaceCorners(mesh: THREE.Mesh): SurfaceCorners | null {
 	const uv = mesh.geometry.getAttribute('uv');
 	const positions = mesh.geometry.getAttribute('position');
 	if (!uv || !positions) return null;
-	const cornerAt = (u: number, v: number) => {
+	const cornerAt = (u: number, v: number, front?: THREE.Vector3) => {
+		let corner: THREE.Vector3 | null = null;
+		let foremost = -Infinity;
 		for (let index = 0; index < uv.count; index++) {
-			if (uv.getX(index) === u && uv.getY(index) === v)
-				return new THREE.Vector3().fromBufferAttribute(positions, index);
+			if (uv.getX(index) !== u || uv.getY(index) !== v) continue;
+			const point = new THREE.Vector3().fromBufferAttribute(positions, index);
+			if (!front) return point;
+			const depth = point.dot(front);
+			if (depth > foremost) {
+				corner = point;
+				foremost = depth;
+			}
 		}
-		return null;
+		return corner;
 	};
-	const topLeft = cornerAt(0, 0);
-	const topRight = cornerAt(1, 0);
-	const bottomRight = cornerAt(1, 1);
-	const bottomLeft = cornerAt(0, 1);
-	return topLeft && topRight && bottomRight && bottomLeft
-		? [topLeft, topRight, bottomRight, bottomLeft]
-		: null;
+	const readCorners = (front?: THREE.Vector3): SurfaceCorners | null => {
+		const topLeft = cornerAt(0, 0, front);
+		const topRight = cornerAt(1, 0, front);
+		const bottomRight = cornerAt(1, 1, front);
+		const bottomLeft = cornerAt(0, 1, front);
+		return topLeft && topRight && bottomRight && bottomLeft
+			? [topLeft, topRight, bottomRight, bottomLeft]
+			: null;
+	};
+	const corners = readCorners();
+	if (!corners) return null;
+	const [topLeft, topRight, , bottomLeft] = corners;
+	const front = topRight.clone().sub(topLeft).cross(topLeft.clone().sub(bottomLeft)).normalize();
+	// Solidify repeats the same UV corners around the card. Select the ones on its outward face.
+	return readCorners(front);
 }
 
 function createFlatScreen(mesh: THREE.Mesh, portrait: boolean): FlatScreen {
@@ -231,6 +248,12 @@ export function createPortfolioScene(
 	let lastY = 0;
 	let targetYaw = 0;
 	let targetPitch = 0;
+	let targetPan = 0;
+	const viewTarget = new THREE.Vector3();
+	const touchPoints = new Map<number, number>();
+	let panning = false;
+	let touchPreview = false;
+	let touchPreviewTimer: ReturnType<typeof setTimeout> | undefined;
 	const cursorOffset = new THREE.Vector2();
 	const foregroundRotation = new THREE.Euler(0, 0, 0, 'YXZ');
 	const foregroundQuaternion = new THREE.Quaternion();
@@ -281,7 +304,7 @@ export function createPortfolioScene(
 	let cardHolder: THREE.Object3D | undefined;
 	let mug: THREE.Object3D | undefined;
 	let coffee: ReturnType<typeof createCoffeeInteraction> | undefined;
-	let printer: THREE.Mesh | undefined;
+	let printer: THREE.Object3D | undefined;
 	let printerPaper: ReturnType<typeof createPrinterPaper>;
 	let cardPresentation: ReturnType<typeof createForegroundPresentation> | undefined;
 	const cardFaces = new Map<
@@ -464,6 +487,26 @@ export function createPortfolioScene(
 		activePointer = undefined;
 		dragMode = null;
 	};
+	const panOverviewBy = (distance: number) => {
+		targetPan = THREE.MathUtils.clamp(targetPan + distance, -CAMERA.panLimit, CAMERA.panLimit);
+		setHovered(null);
+	};
+	const clearTouchPreview = () => {
+		clearTimeout(touchPreviewTimer);
+		touchPreviewTimer = undefined;
+		if (touchPreview) setHovered(null);
+		touchPreview = false;
+	};
+	const finishPanPointer = (pointerId: number) => {
+		touchPoints.delete(pointerId);
+		if (!panning) return false;
+		if (touchPoints.size === 0) {
+			panning = false;
+			endDrag();
+			canvas.style.cursor = 'grab';
+		}
+		return true;
+	};
 	const setFocused = (next: FocusTarget | null) => {
 		if (focused === next) return;
 		if (
@@ -484,6 +527,9 @@ export function createPortfolioScene(
 			foregroundRotation.set(0, 0, 0);
 		}
 		endDrag();
+		clearTouchPreview();
+		touchPoints.clear();
+		panning = false;
 		foregroundReady = false;
 		focusReady = false;
 		cursorOffset.set(0, 0);
@@ -504,8 +550,20 @@ export function createPortfolioScene(
 		onFocusChange(next);
 	};
 	const onPointerDown = (event: PointerEvent) => {
-		if (event.button !== 0 || dragMode) return;
+		if (event.button !== 0) return;
+		if (event.pointerType === 'touch' && !focused) {
+			touchPoints.set(event.pointerId, event.clientX);
+			if (touchPoints.size > 1) {
+				panning = true;
+				clearTouchPreview();
+				setHovered(null);
+				canvas.setPointerCapture(event.pointerId);
+				return;
+			}
+		}
+		if (dragMode) return;
 		if (focused && (!foregroundReady || !hitForeground(event.clientX, event.clientY))) return;
+		clearTouchPreview();
 		clearTimeout(hoverTimer);
 		hoverTimer = undefined;
 		dragMode = focused ? 'foreground' : 'overview';
@@ -515,12 +573,29 @@ export function createPortfolioScene(
 		startY = lastY = event.clientY;
 		canvas.setPointerCapture(event.pointerId);
 		canvas.style.cursor = 'grabbing';
+		if (event.pointerType === 'touch' && !focused) {
+			const target = hitTarget(startX, startY);
+			if (target) {
+				touchPreviewTimer = setTimeout(() => {
+					touchPreview = true;
+					setHovered(target);
+				}, 350);
+			}
+		}
 	};
 	const onPointerMove = (event: PointerEvent) => {
+		if (panning) {
+			const previousX = touchPoints.get(event.pointerId);
+			if (previousX === undefined) return;
+			touchPoints.set(event.pointerId, event.clientX);
+			if (touchPoints.size === 2) panOverviewBy((previousX - event.clientX) * 0.0015);
+			return;
+		}
 		if (dragMode) {
 			if (activePointer !== event.pointerId) return;
 			if (Math.hypot(event.clientX - startX, event.clientY - startY) > 5) dragged = true;
 			if (dragged) {
+				clearTouchPreview();
 				const dx = event.clientX - lastX;
 				const dy = event.clientY - lastY;
 				if (dragMode === 'foreground') {
@@ -548,6 +623,8 @@ export function createPortfolioScene(
 			lastY = event.clientY;
 			return;
 		}
+		if (event.pointerType === 'touch') return;
+		clearTouchPreview();
 		if (focused) {
 			canvas.style.cursor =
 				foregroundReady && hitForeground(event.clientX, event.clientY) ? 'grab' : 'default';
@@ -559,9 +636,15 @@ export function createPortfolioScene(
 		updateHover(target, event.clientX, event.clientY);
 	};
 	const onPointerUp = (event: PointerEvent) => {
+		if (finishPanPointer(event.pointerId)) return;
 		if (!dragMode || activePointer !== event.pointerId) return;
 		const mode = dragMode;
 		endDrag();
+		clearTimeout(touchPreviewTimer);
+		if (touchPreview) {
+			touchPreviewTimer = setTimeout(clearTouchPreview, 1800);
+			return;
+		}
 		if (mode === 'foreground') {
 			canvas.style.cursor = hitForeground(event.clientX, event.clientY) ? 'grab' : 'default';
 			return;
@@ -581,9 +664,12 @@ export function createPortfolioScene(
 			soundEnabled = !soundEnabled;
 			onSoundChange(soundEnabled);
 		} else if (!dragged && target === 'coffee') coffee?.sip(cameraWorld);
-		if (!focused) updateHover(target, event.clientX, event.clientY);
+		if (!focused && event.pointerType !== 'touch')
+			updateHover(target, event.clientX, event.clientY);
 	};
-	const onPointerCancel = () => {
+	const onPointerCancel = (event: PointerEvent) => {
+		if (finishPanPointer(event.pointerId) || activePointer !== event.pointerId) return;
+		clearTouchPreview();
 		endDrag();
 		cursorOffset.set(0, 0);
 		clearTimeout(hoverTimer);
@@ -591,7 +677,8 @@ export function createPortfolioScene(
 		setHovered(null);
 		if (focused) canvas.style.cursor = 'default';
 	};
-	const onPointerLeave = () => {
+	const onPointerLeave = (event: PointerEvent) => {
+		if (event.pointerType === 'touch' && touchPreview) return;
 		cursorOffset.set(0, 0);
 		if (!dragMode) {
 			clearTimeout(hoverTimer);
@@ -642,7 +729,11 @@ export function createPortfolioScene(
 			const cardHolderCandidate = model.getObjectByName('Cardholder_Base');
 			const frontCardCandidate = model.getObjectByName('Card');
 			const printerCandidate = model.getObjectByName('Printer_Base');
-			const paperCandidate = printerCandidate?.getObjectByName('Printer_Paper');
+			const paperCandidate =
+				printerCandidate?.getObjectByName('Printer_Paper') ??
+				printerCandidate?.children.find((part) =>
+					/^Printer_Paper\.\d+$/.test(part.userData.name ?? part.name)
+				);
 			mug = model.getObjectByName('Mug_Base');
 			const coffeeFluid = mug?.getObjectByName('Mug_Fluid');
 			if (
@@ -675,9 +766,19 @@ export function createPortfolioScene(
 			headphone = headphoneCandidate;
 			headphoneStand = standCandidate;
 			cardHolder = cardHolderCandidate;
-			if (printerCandidate instanceof THREE.Mesh && paperCandidate instanceof THREE.Mesh) {
+			const glasses = model.getObjectByName('Glasses');
+			if (glasses) {
+				glasses.visible = false;
+				glasses.traverse((part) => part.layers.disableAll());
+			}
+			if (printerCandidate && paperCandidate instanceof THREE.Mesh) {
 				printer = printerCandidate;
-				printerPaper = createPrinterPaper(printer, paperCandidate, foreground);
+				printerPaper = createPrinterPaper(
+					printer,
+					paperCandidate,
+					foreground,
+					renderer.capabilities.getMaxAnisotropy()
+				);
 			}
 			phoneScreen = createFlatScreen(phoneScreenCandidate, true);
 			embeddedScreen = createFlatScreen(embeddedScreenCandidate, false);
@@ -694,7 +795,14 @@ export function createPortfolioScene(
 					const height = bottomLeft.distanceTo(topLeft);
 					if (width && height) cardFaces.set(name, { mesh, corners, aspect: width / height });
 				}
-				mesh.material = new THREE.MeshStandardMaterial({ color: 0xf7fbff, side: THREE.DoubleSide });
+				mesh.material = new THREE.MeshStandardMaterial({
+					color: 0xf7fbff,
+					roughness: 0.9,
+					emissive: 0xf7fbff,
+					emissiveIntensity: 0.35,
+					side:
+						mesh.geometry.getAttribute('position').count === 4 ? THREE.DoubleSide : THREE.FrontSide
+				});
 			});
 			const corners = cardFaces.get('Card')?.corners;
 			if (!corners) throw new Error('The front card needs UVs at all four corners');
@@ -956,7 +1064,9 @@ export function createPortfolioScene(
 					(CAMERA.focusDistance * (narrow ? CAMERA.phoneFocusAspect : CAMERA.desktopFocusAspect)) /
 						camera.aspect
 				);
-				yaw.position.lerp(screenPosition, ease(0.1));
+				viewTarget.copy(screenPosition);
+				viewTarget.x += targetPan * (1 - focusAmount);
+				yaw.position.lerp(viewTarget, ease(0.1));
 				cameraDistance = THREE.MathUtils.lerp(CAMERA.overviewDistance, laptopDistance, focusAmount);
 				const cursorWeight =
 					focused || activePresentation || reducedMotion.matches ? 0 : 1 - focusAmount;
@@ -976,7 +1086,8 @@ export function createPortfolioScene(
 					focusAmount
 				);
 				camera.position.set(0, cameraHeight, cameraDistance);
-				camera.lookAt(screenPosition);
+				viewTarget.x = yaw.position.x;
+				camera.lookAt(viewTarget);
 			}
 			camera.updateWorldMatrix(true, false);
 			camera.getWorldPosition(cameraWorld);
@@ -1068,6 +1179,9 @@ export function createPortfolioScene(
 			if (screenMesh && phoneScreen && embeddedScreen && pop.finished) setFocused(target);
 			else focusRequested = target;
 		},
+		panOverview: (direction) => {
+			if (!focused) panOverviewBy(direction * 0.24);
+		},
 		getScreenQuad: (target) => {
 			const flat = target === 'phone' ? phoneScreen : target === 'embedded' ? embeddedScreen : null;
 			const mesh = target === 'laptop' ? screenMesh : flat?.mesh;
@@ -1079,11 +1193,6 @@ export function createPortfolioScene(
 			if (!face || !screenObject.visible) return null;
 			const quad = projectQuad(face.mesh, face.corners, true);
 			return quad && { quad, aspect: face.aspect, foreground: face.mesh.parent === foreground };
-		},
-		getPaperProjection: () => {
-			if (!printerPaper || printerPaper.mesh.parent !== foreground) return null;
-			const quad = projectQuad(printerPaper.mesh, printerPaper.corners, true);
-			return quad && { quad, aspect: printerPaper.aspect };
 		},
 		getForegroundMaskPath: () => {
 			// The device iframes sit above WebGL, so mask them wherever a foreground mesh is visible.
@@ -1126,6 +1235,7 @@ export function createPortfolioScene(
 			endDrag();
 			cancelAnimationFrame(frameId);
 			clearTimeout(hoverTimer);
+			clearTimeout(touchPreviewTimer);
 			activePresentation?.motion.update(0, camera, foregroundQuaternion);
 			resizeObserver.disconnect();
 			canvas.removeEventListener('pointerdown', onPointerDown);

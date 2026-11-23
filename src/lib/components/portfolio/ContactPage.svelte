@@ -1,16 +1,38 @@
 <script lang="ts">
-	import { contactLinks } from '#lib/contact.js';
+	import { contactDestination } from '#lib/contact.js';
 	import { copy, type Language } from '#lib/language.js';
 	let { language }: { language: Language } = $props();
+	const t = $derived(copy[language]);
+	const links = $derived([
+		{ label: 'GitHub', href: contactDestination('github') },
+		{ label: 'LinkedIn', href: contactDestination('linkedin') },
+		{ label: 'WhatsApp', href: contactDestination('whatsapp') },
+		{ label: t.emailShortcut, href: contactDestination('email') }
+	]);
 </script>
 
-<h1 class="text-3xl font-bold text-blue-800">{copy[language].contact}</h1>
+<h1 class="text-3xl font-bold text-blue-800">{t.contact}</h1>
 <ul class="mt-5 grid max-w-xl gap-3 sm:grid-cols-2">
 	<!-- eslint-disable svelte/no-navigation-without-resolve -->
-	<li><a href={contactLinks.github} target="_blank" rel="noopener noreferrer">GitHub</a></li>
-	<li><a href={contactLinks.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn</a></li>
-	<li><a href={contactLinks.whatsapp} target="_blank" rel="noopener noreferrer">WhatsApp</a></li>
-	<li><a href={contactLinks.email}>Email</a></li>
+	{#each links as { label, href } (label)}
+		<li>
+			{#if href}
+				<a
+					{href}
+					target={href.startsWith('mailto:') ? undefined : '_blank'}
+					rel="noopener noreferrer"
+				>
+					{label}
+				</a>
+			{:else}
+				<span
+					class="block rounded-xl border border-blue-100 px-4 py-3 font-semibold text-slate-600"
+				>
+					{label} <small class="ml-1 font-normal">{t.shortcutUnavailable}</small>
+				</span>
+			{/if}
+		</li>
+	{/each}
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
 </ul>
 

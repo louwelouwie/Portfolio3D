@@ -1,7 +1,7 @@
 <script lang="ts">
 	import PortfolioWindow from '#lib/components/PortfolioWindow.svelte';
 	import DesktopIcon from '#lib/components/DesktopIcon.svelte';
-	import { asset, resolve } from '$app/paths';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -19,20 +19,28 @@
 	} from '#lib/language.js';
 	import { readIconPosition, type IconPosition } from '#lib/desktop/iconPosition.js';
 	import { iconSize, placeIcon } from '#lib/desktop/iconLayout.js';
-	import { portfolioApps, type PortfolioAppId } from '#lib/portfolio/apps.js';
+	import type { PortfolioAppId } from '#lib/portfolio/apps.js';
+	import { launcherItems, type LauncherItem } from '#lib/portfolio/launcher.js';
 
 	const embedded = page.url.searchParams.has('embedded');
 	// The laptop desktop has its own fixed light theme; the lamp changes only the outer scene.
 	const darkMode = false;
 	let language = $state<Language>('en');
 	let t = $derived(copy[language]);
-	let iconPositions = $state<Record<'bin' | PortfolioAppId, IconPosition>>({
-		bin: { x: 24, y: 24 },
-		skills: { x: 140, y: 24 },
-		about: { x: 256, y: 24 },
-		contact: { x: 372, y: 24 },
-		projects: { x: 488, y: 24 }
-	});
+	let iconPositions = $state<Partial<Record<LauncherItem['id'], IconPosition>>>({});
+	const icons = $derived(launcherItems(language));
+	const iconAnchors: Record<LauncherItem['id'], [number, number]> = {
+		about: [0.11, 0.2],
+		contact: [0.22, 0.2],
+		skills: [0.15, 0.38],
+		github: [0.51, 0.35],
+		linkedin: [0.6, 0.3],
+		email: [0.59, 0.53],
+		cv: [0.3, 0.82],
+		projects: [0.76, 0.82],
+		artisanBouwservice: [0.9, 0.8],
+		monkeyEmpires: [0.84, 0.62]
+	};
 	let windowApp = $state<PortfolioAppId | null>(
 		page.url.searchParams.has('closed') ? null : 'projects'
 	);
@@ -44,12 +52,17 @@
 		windowMaximized = readWindowMaximized();
 		language = readLanguage();
 		const occupied: (IconPosition & { width: number; height: number })[] = [];
-		const next = { ...iconPositions };
-		for (const id of ['bin', ...portfolioApps] as const) {
-			const position = placeIcon(readIconPosition(id) ?? iconPositions[id], occupied, {
-				width: window.innerWidth,
-				height: window.innerHeight - 48
-			});
+		const next: Partial<Record<LauncherItem['id'], IconPosition>> = {};
+		const bounds = { width: innerWidth, height: innerHeight - 48 };
+		const step = iconSize + 20;
+		const columns = Math.max(1, Math.floor((bounds.width - 24) / step));
+		for (const [index, { id }] of icons.entries()) {
+			const [x, y] = iconAnchors[id];
+			const start =
+				bounds.width >= 800 && bounds.height >= 480
+					? { x: x * (bounds.width - iconSize), y: y * (bounds.height - iconSize) }
+					: { x: 24 + (index % columns) * step, y: 24 + Math.floor(index / columns) * step };
+			const position = placeIcon(readIconPosition(id) ?? start, occupied, bounds);
 			next[id] = position;
 			occupied.push({ ...position, width: iconSize, height: iconSize });
 		}
@@ -60,7 +73,7 @@
 			if (event.key === languageStorageKey) language = event.newValue === 'nl' ? 'nl' : 'en';
 		};
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
+			if (event.key === 'Escape' && !event.repeat) {
 				if (embedded) window.parent.postMessage({ type: 'portfolio-exit' }, location.origin);
 				else void exitToDesk();
 			}
@@ -103,7 +116,8 @@
 
 <div aria-hidden="true" class="fixed inset-0 bg-[#e7f0ff]"></div>
 <main
-	class={`desktop-view relative h-screen min-h-[400px] overflow-hidden bg-[#5b9df0] text-white ${leaving ? 'desktop-exit' : ''}`}
+	data-locked-viewport={embedded || undefined}
+	class={`desktop-view relative h-dvh overflow-clip bg-[#5b9df0] text-white ${leaving ? 'desktop-exit' : ''}`}
 >
 	<h1 class="sr-only">Chris Louwerse portfolio desktop</h1>
 	{#if !embedded}
@@ -115,25 +129,17 @@
 	{/if}
 	{#if desktopReady}
 		<div class="absolute inset-x-0 top-0 bottom-12">
-			<DesktopIcon
-				id="bin"
-				label={t.trash}
-				dragHint={t.dragHint}
-				image={asset('bin.png')}
-				{darkMode}
-				startX={iconPositions.bin.x}
-				startY={iconPositions.bin.y}
-			/>
-			{#each portfolioApps as app (app)}
+			{#each icons as item (item.id)}
+				{@const position = iconPositions[item.id]}
 				<DesktopIcon
-					id={app}
-					label={t[app]}
+					id={item.id}
+					{item}
 					dragHint={t.dragHint}
-					letter={t[app][0]}
+					unavailableHint={t.shortcutUnavailable}
 					{darkMode}
-					startX={iconPositions[app].x}
-					startY={iconPositions[app].y}
-					onActivate={() => toggleApp(app)}
+					startX={position?.x ?? 0}
+					startY={position?.y ?? 0}
+					onOpenApp={toggleApp}
 				/>
 			{/each}
 		</div>

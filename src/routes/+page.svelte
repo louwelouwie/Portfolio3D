@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import cvUrl from '#lib/assets/ChrisLouwerseCV.pdf?url';
 	import type {
 		HoverTarget,
@@ -28,7 +30,7 @@
 	let container: HTMLDivElement;
 	let canvas: HTMLCanvasElement;
 	let tooltip = $state<HTMLDivElement>();
-	let scene: PortfolioScene | undefined;
+	let scene = $state.raw<PortfolioScene>();
 	let sceneError = $state(false);
 	let hovered = $state<HoverTarget>(null);
 	let lastTooltipTarget = $state<HoverTarget>(null);
@@ -49,12 +51,22 @@
 	let phoneScreen = $state<HTMLIFrameElement>();
 	let embeddedScreen = $state<HTMLIFrameElement>();
 	const screenTransforms = new WeakMap<HTMLIFrameElement, string>();
-	let paperPreview = $state<HTMLIFrameElement>();
 	let cardElements = $state<Partial<Record<CardMeshName, HTMLDivElement>>>({});
 	let cardInForeground = $state(false);
 	let screenLayerWidth = $state(0);
 	let screenLayerHeight = $state(0);
 	let foregroundMaskPath = $state('');
+	let focusHistory: Promise<void> | undefined;
+	let returningToDesk = false;
+
+	$effect(() => {
+		const target = page.state.deskFocus;
+		const currentScene = scene;
+		untrack(() => {
+			if (target) currentScene?.enterFocus(target);
+			else currentScene?.exitFocus();
+		});
+	});
 
 	function toggleTheme() {
 		if (scene) scene.setDarkMode(!darkMode, { playSound: true, manual: true });
@@ -86,6 +98,22 @@
 	function updateFocus(value: FocusTarget | null) {
 		focused = value;
 		closeupReady = false;
+		returningToDesk = false;
+		if (value && page.state.deskFocus !== value) {
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- Reuse the current base-aware URL.
+			focusHistory = goto(page.url.href, {
+				shallow: true,
+				state: { ...page.state, deskFocus: value }
+			}).catch((error: unknown) => console.error('Could not save desk focus in history', error));
+		}
+	}
+
+	async function exitToDesk() {
+		if (!focused || returningToDesk) return;
+		returningToDesk = true;
+		await focusHistory;
+		if (page.state.deskFocus) history.back();
+		else scene?.exitFocus();
 	}
 
 	function syncScreen(target: ScreenTarget, iframe: HTMLIFrameElement | undefined) {
@@ -120,16 +148,6 @@
 			element.style.visibility = 'visible';
 			element.style.transform = projectElementToQuad(projection.quad, width, height);
 		}
-		if (paperPreview) {
-			const projection = closeupReady && scene?.getPaperProjection();
-			paperPreview.style.visibility = projection ? 'visible' : 'hidden';
-			if (projection) {
-				const width = paperPreview.offsetWidth;
-				const height = width / projection.aspect;
-				paperPreview.style.height = `${height}px`;
-				paperPreview.style.transform = projectElementToQuad(projection.quad, width, height);
-			}
-		}
 		foregroundMaskPath = scene?.getForegroundMaskPath() ?? '';
 	}
 
@@ -159,10 +177,12 @@
 					(iframe) => event.source === iframe?.contentWindow
 				)
 			)
-				scene?.exitFocus();
+				void exitToDesk();
 		};
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape' && focused) scene?.exitFocus();
+			if (event.key !== 'Escape' || event.repeat || !focused) return;
+			event.preventDefault();
+			void exitToDesk();
 		};
 		window.addEventListener('storage', onStorage);
 		window.addEventListener('message', onMessage);
@@ -227,7 +247,8 @@
 </svelte:head>
 
 <main
-	class={`relative h-screen min-h-[400px] overflow-hidden transition-colors duration-500 ${darkMode ? 'text-white' : 'text-slate-900'}`}
+	data-locked-viewport
+	class={`fixed inset-0 overflow-clip transition-colors duration-500 ${darkMode ? 'text-white' : 'text-slate-900'}`}
 >
 	<div bind:this={container} class="absolute inset-0">
 		<canvas
@@ -246,29 +267,86 @@
 		focused={focused !== null}
 		{language}
 	/>
-	<SceneControls
-		{darkMode}
-		{soundEnabled}
-		{hovered}
-		focused={focused !== null}
-		{language}
-		onToggleTheme={toggleTheme}
-		onToggleSound={toggleSound}
-		onToggleLanguage={toggleLanguage}
-	/>
-	<SceneObjectControls
-		{darkMode}
-		{focused}
-		{hovered}
-		{preferredDevice}
-		{language}
-		onTogglePortfolio={() => (focused ? scene?.exitFocus() : scene?.enterFocus(preferredDevice))}
-	/>
+	<div
+		class={`pointer-events-none absolute inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 flex items-center justify-center gap-1.5 ${focused ? 'sm:inset-auto sm:top-4 sm:left-4' : ''}`}
+	>
+		<SceneObjectControls
+			{darkMode}
+			{focused}
+			{hovered}
+			{preferredDevice}
+			{language}
+			onTogglePortfolio={() => (focused ? void exitToDesk() : scene?.enterFocus(preferredDevice))}
+		/>
+		{#if focused === 'printer'}
+			<div
+				class="flex h-11 w-[8.25rem] shrink-0 justify-end sm:fixed sm:top-4 sm:right-4 sm:w-auto"
+			>
+				{#if closeupReady}
+					<!-- eslint-disable svelte/no-navigation-without-resolve -->
+					<a
+						href={cvUrl}
+						download="ChrisLouwerseCV.pdf"
+						class={`pointer-events-auto flex items-center justify-center gap-1 rounded-xl border px-2 text-sm font-semibold whitespace-nowrap shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 sm:gap-1.5 sm:px-3 ${darkMode ? 'border-blue-300/25 bg-[#10264a]/95 text-white hover:bg-[#1d3c69]' : 'border-blue-200 bg-white/95 text-[#10223d] hover:bg-blue-50'}`}
+					>
+						<svg
+							aria-hidden="true"
+							viewBox="0 0 24 24"
+							class="size-4 shrink-0"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4" />
+						</svg>
+						{t.downloadCv}
+					</a>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				{/if}
+			</div>
+		{:else}
+			<SceneControls
+				{darkMode}
+				{soundEnabled}
+				{hovered}
+				focused={focused !== null}
+				{language}
+				onToggleTheme={toggleTheme}
+				onToggleSound={toggleSound}
+				onToggleLanguage={toggleLanguage}
+			/>
+		{/if}
+	</div>
+	{#if !focused}
+		{#each [-1, 1] as const as direction (direction)}
+			<button
+				type="button"
+				aria-label={direction === -1 ? t.panLeft : t.panRight}
+				onclick={() => scene?.panOverview(direction)}
+				class={`absolute top-1/2 z-20 grid size-11 -translate-y-1/2 cursor-pointer place-items-center rounded-full border shadow-md transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 sm:hidden ${direction === -1 ? 'left-2' : 'right-2'} ${darkMode ? 'border-blue-300/25 bg-[#10264a]/95 text-white' : 'border-blue-200 bg-white/95 text-[#10223d]'}`}
+			>
+				<svg
+					aria-hidden="true"
+					viewBox="0 0 24 24"
+					class="size-5"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path d={direction === -1 ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'} />
+				</svg>
+			</button>
+		{/each}
+	{/if}
 	{#each CARD_MESH_NAMES as name (name)}
 		{@const interactive = name === 'Card' && focused === 'card' && closeupReady}
 		{@const inForeground = name === 'Card' && cardInForeground}
 		<div
-			class={`pointer-events-none fixed inset-0 ${inForeground ? 'z-30' : 'z-[4]'}`}
+			class={`pointer-events-none absolute inset-0 ${inForeground ? 'z-30' : 'z-[4]'}`}
 			style:mask-image={!inForeground && foregroundMaskPath
 				? 'url(#foreground-object-mask)'
 				: undefined}
@@ -282,24 +360,6 @@
 			</div>
 		</div>
 	{/each}
-	{#if focused === 'printer'}
-		<iframe
-			bind:this={paperPreview}
-			src={`${cvUrl}#toolbar=0&navpanes=0&view=Fit`}
-			title={t.cvPreview}
-			class="invisible fixed top-0 left-0 z-30 w-[800px] origin-top-left border-0 bg-white"
-		></iframe>
-		{#if closeupReady}
-			<!-- eslint-disable svelte/no-navigation-without-resolve -->
-			<a
-				href={cvUrl}
-				download="ChrisLouwerseCV.pdf"
-				class="fixed top-4 right-4 z-50 flex h-11 items-center rounded-xl border border-blue-200 bg-white px-4 text-sm font-semibold text-[#10223d] shadow-lg hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-700"
-				>{t.downloadCv}</a
-			>
-			<!-- eslint-enable svelte/no-navigation-without-resolve -->
-		{/if}
-	{/if}
 	<svg aria-hidden="true" class="pointer-events-none fixed h-0 w-0">
 		<defs>
 			<mask id="foreground-object-mask" x="0" y="0" width="1" height="1">
@@ -311,7 +371,7 @@
 	<div
 		bind:clientWidth={screenLayerWidth}
 		bind:clientHeight={screenLayerHeight}
-		class="pointer-events-none fixed inset-0 z-[5]"
+		class="pointer-events-none absolute inset-0 z-[5]"
 		style:mask-image={foregroundMaskPath ? 'url(#foreground-object-mask)' : undefined}
 	>
 		<!-- The iframe becomes an interactive desktop in laptop focus. -->
@@ -321,6 +381,7 @@
 			src={`${resolve('/desktop')}?closed=1&embedded=1`}
 			title="Laptop desktop"
 			aria-hidden={focused !== 'laptop'}
+			inert={focused !== 'laptop' || !closeupReady}
 			tabindex={focused === 'laptop' && closeupReady ? undefined : -1}
 			class={`laptop-screen absolute top-0 left-0 border-0 transition-opacity duration-500 motion-reduce:transition-none ${screenReady.laptop ? 'visible' : 'invisible'} ${focused && focused !== 'laptop' ? 'opacity-0' : 'opacity-100'} ${focused === 'laptop' && closeupReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
 			style={`width:${DEVICE_SCREENS.laptop.width}px;height:${DEVICE_SCREENS.laptop.height}px;transform-origin:top left;`}
@@ -331,8 +392,9 @@
 			src={`${resolve('/phone')}?embedded=1`}
 			title="Phone portfolio"
 			aria-hidden={focused !== 'phone'}
+			inert={focused !== 'phone' || !closeupReady}
 			tabindex={focused === 'phone' && closeupReady ? undefined : -1}
-			class={`absolute top-0 left-0 border-0 transition-opacity duration-500 motion-reduce:transition-none ${screenReady.phone ? 'visible' : 'invisible'} ${focused && focused !== 'phone' ? 'opacity-0' : 'opacity-100'} ${focused === 'phone' && closeupReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
+			class={`absolute top-0 left-0 rounded-[14px] border-0 transition-opacity duration-500 motion-reduce:transition-none ${screenReady.phone ? 'visible' : 'invisible'} ${focused && focused !== 'phone' ? 'opacity-0' : 'opacity-100'} ${focused === 'phone' && closeupReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
 			style={`width:${DEVICE_SCREENS.phone.width}px;height:${DEVICE_SCREENS.phone.height}px;transform-origin:top left;`}
 		></iframe>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -341,6 +403,7 @@
 			src={`${resolve('/game')}?embedded=1`}
 			title={t.embeddedZoom}
 			aria-hidden={focused !== 'embedded'}
+			inert={focused !== 'embedded' || !closeupReady}
 			tabindex={focused === 'embedded' && closeupReady ? undefined : -1}
 			class={`absolute top-0 left-0 border-0 transition-opacity duration-500 motion-reduce:transition-none ${screenReady.embedded ? 'visible' : 'invisible'} ${focused && focused !== 'embedded' ? 'opacity-0' : 'opacity-100'} ${focused === 'embedded' && closeupReady ? 'pointer-events-auto' : 'pointer-events-none'}`}
 			style={`width:${DEVICE_SCREENS.embedded.width}px;height:${DEVICE_SCREENS.embedded.height}px;transform-origin:top left;`}

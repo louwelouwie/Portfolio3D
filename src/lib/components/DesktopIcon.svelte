@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import LauncherIcon from './LauncherIcon.svelte';
+	import type { LauncherItem } from '#lib/portfolio/launcher.js';
 	import {
 		iconPositionKey,
 		parseIconPosition,
 		saveIconPosition
 	} from '#lib/desktop/iconPosition.js';
-	import { placeIcon } from '#lib/desktop/iconLayout.js';
+	import { iconSize, placeIcon } from '#lib/desktop/iconLayout.js';
 
 	type Gesture = {
 		pointerId: number;
@@ -18,27 +20,34 @@
 
 	let {
 		id,
-		label,
+		item,
 		dragHint,
-		image,
-		letter,
+		unavailableHint,
 		darkMode,
 		startX,
 		startY,
-		onActivate
+		width = iconSize,
+		height = iconSize,
+		gap,
+		onOpenApp
 	}: {
 		id: string;
-		label: string;
+		item: LauncherItem;
 		dragHint: string;
-		image?: string;
-		letter?: string;
+		unavailableHint: string;
 		darkMode: boolean;
 		startX: number;
 		startY: number;
-		onActivate?: () => void;
+		width?: number;
+		height?: number;
+		gap?: number;
+		onOpenApp: (id: Extract<LauncherItem, { kind: 'app' }>['id']) => void;
 	} = $props();
 
-	let button = $state<HTMLButtonElement>();
+	const href = $derived(item.kind === 'shortcut' ? item.href : undefined);
+	const download = $derived(item.kind === 'shortcut' ? item.download : undefined);
+	const unavailable = $derived(item.kind === 'shortcut' && !href);
+	let button = $state<HTMLElement>();
 	let x = $state(0);
 	let y = $state(0);
 	let positioned = $state(false);
@@ -49,7 +58,7 @@
 	function moveTo(nextX: number, nextY: number, avoidOverlap = false) {
 		const parent = button?.parentElement;
 		if (!parent || !button) return;
-		const occupied = [...parent.querySelectorAll<HTMLButtonElement>('[data-desktop-icon]')]
+		const occupied = [...parent.querySelectorAll<HTMLElement>('[data-desktop-icon]')]
 			.filter((other) => other !== button)
 			.map((other) => ({
 				x: Number.parseFloat(other.style.left) || 0,
@@ -62,7 +71,8 @@
 			avoidOverlap ? occupied : [],
 			{ width: parent.clientWidth, height: parent.clientHeight },
 			button.offsetWidth,
-			button.offsetHeight
+			button.offsetHeight,
+			gap
 		);
 		x = next.x;
 		y = next.y;
@@ -70,6 +80,7 @@
 
 	function startDrag(event: PointerEvent) {
 		if (event.button !== 0 || !button) return;
+		suppressClick = false;
 		gesture = {
 			pointerId: event.pointerId,
 			pointerX: event.clientX,
@@ -84,6 +95,10 @@
 
 	function moveDrag(event: PointerEvent) {
 		if (!gesture || event.pointerId !== gesture.pointerId) return;
+		if (!event.buttons) {
+			endDrag(event);
+			return;
+		}
 		const dx = event.clientX - gesture.pointerX;
 		const dy = event.clientY - gesture.pointerY;
 		if (Math.hypot(dx, dy) > 5) gesture.moved = true;
@@ -103,12 +118,12 @@
 	}
 
 	function activate(event: MouseEvent) {
-		if (suppressClick) {
+		if (suppressClick && event.detail !== 0) {
 			event.preventDefault();
 			suppressClick = false;
 			return;
 		}
-		onActivate?.();
+		if (item.kind === 'app') onOpenApp(item.id);
 	}
 
 	function moveWithKeyboard(event: KeyboardEvent) {
@@ -147,34 +162,35 @@
 	});
 </script>
 
-<button
+<svelte:window onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag} />
+
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
+<svelte:element
+	this={href ? 'a' : 'button'}
 	bind:this={button}
-	type="button"
+	type={href ? undefined : 'button'}
+	{href}
+	{download}
+	target={href && !download && !href.startsWith('mailto:') ? '_blank' : undefined}
+	rel={href ? 'noopener noreferrer' : undefined}
+	draggable={false}
 	data-desktop-icon={id}
-	aria-label={label}
-	title={`${label} — ${dragHint}`}
-	class={`group absolute flex h-24 w-24 touch-none flex-col items-center gap-1 rounded-xl p-1 text-center text-white transition-[background-color,box-shadow,translate,scale] duration-200 ease-out select-none focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none motion-reduce:transition-none ${dragging ? 'z-30 scale-105 cursor-grabbing bg-white/20 shadow-lg' : 'z-10 cursor-grab hover:-translate-y-1 hover:scale-105 hover:bg-white/15 hover:shadow-md'}`}
-	style={`left:${x}px;top:${y}px;visibility:${positioned ? 'visible' : 'hidden'};`}
+	role={href ? 'link' : 'button'}
+	aria-label={item.label}
+	aria-disabled={unavailable || undefined}
+	title={`${item.label} — ${unavailable ? unavailableHint : dragHint}`}
+	class={`group absolute flex touch-none flex-col items-center gap-1 rounded-xl p-1 text-center text-white transition-[background-color,box-shadow,translate,scale] duration-200 ease-out select-none focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none motion-reduce:transition-none ${dragging ? 'z-30 scale-105 cursor-grabbing bg-white/20 shadow-lg' : 'z-10 cursor-grab hover:-translate-y-1 hover:scale-105 hover:bg-white/15 hover:shadow-md'}`}
+	style={`width:${width}px;height:${height}px;left:${x}px;top:${y}px;visibility:${positioned ? 'visible' : 'hidden'};`}
 	onpointerdown={startDrag}
-	onpointermove={moveDrag}
-	onpointerup={endDrag}
-	onpointercancel={endDrag}
 	onkeydown={moveWithKeyboard}
 	onclick={activate}
 >
-	{#if image}
-		<img
-			src={image}
-			alt=""
-			draggable="false"
-			class="h-14 w-14 rounded-xl bg-white object-cover shadow-md transition-shadow duration-200 group-hover:shadow-xl"
-		/>
-	{:else}
-		<span
-			aria-hidden="true"
-			class={`flex h-14 w-14 items-center justify-center rounded-xl text-3xl font-extrabold shadow-md ring-1 transition-[box-shadow,transform] duration-200 group-hover:shadow-xl ${darkMode ? 'bg-[#091a35] text-blue-300 ring-blue-300/25' : 'bg-white text-blue-700 ring-blue-100'}`}
-			>{letter}</span
-		>
-	{/if}
-	<span class="w-full truncate text-sm font-semibold">{label}</span>
-</button>
+	<span
+		aria-hidden="true"
+		class={`flex size-14 min-h-0 items-center justify-center rounded-xl shadow-md ring-1 transition-shadow duration-200 group-hover:shadow-xl ${darkMode ? 'bg-[#091a35] text-blue-300 ring-blue-300/25' : 'bg-white text-blue-700 ring-blue-100'}`}
+	>
+		<LauncherIcon icon={item.id} />
+	</span>
+	<span class="line-clamp-2 w-full text-sm leading-tight font-semibold">{item.label}</span>
+</svelte:element>
+<!-- eslint-enable svelte/no-navigation-without-resolve -->

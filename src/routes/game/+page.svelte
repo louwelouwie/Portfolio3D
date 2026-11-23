@@ -19,7 +19,7 @@
 			if (event.key === languageStorageKey) language = event.newValue === 'nl' ? 'nl' : 'en';
 		};
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') backToDesk();
+			if (event.key === 'Escape' && !event.repeat) backToDesk();
 		};
 		window.addEventListener('storage', onStorage);
 		window.addEventListener('keydown', onKeyDown);
@@ -35,7 +35,10 @@
 	<meta name="description" content="The embedded display in Chris Louwerse's portfolio." />
 </svelte:head>
 
-<main class="flex min-h-screen flex-col bg-[#101922] p-4 text-[#c4f5df]">
+<main
+	data-locked-viewport={embedded || undefined}
+	class="flex min-h-dvh flex-col bg-[#101922] p-4 text-[#c4f5df]"
+>
 	{#if !embedded}
 		<button
 			type="button"

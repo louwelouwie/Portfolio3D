@@ -28,7 +28,7 @@
 	aria-label={t.quickControls}
 	aria-hidden={focused}
 	inert={focused}
-	class={`fixed top-3 right-3 z-50 flex items-center gap-2 transition-all duration-300 motion-reduce:transition-none sm:top-4 sm:right-4 ${focused ? 'pointer-events-none -translate-y-2 opacity-0' : 'opacity-100'}`}
+	class={`flex items-center gap-1.5 transition-[translate,opacity] duration-300 motion-reduce:transition-none sm:fixed sm:top-4 sm:right-4 sm:gap-2 ${focused ? '-translate-y-2 opacity-0' : 'pointer-events-auto opacity-100'}`}
 >
 	<button
 		type="button"

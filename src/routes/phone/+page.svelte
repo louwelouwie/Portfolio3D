@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import DesktopIcon from '#lib/components/DesktopIcon.svelte';
 	import PortfolioApp from '#lib/components/portfolio/PortfolioApp.svelte';
-	import { portfolioApps, type PortfolioAppId } from '#lib/portfolio/apps.js';
+	import { iconSize, placeIcon } from '#lib/desktop/iconLayout.js';
+	import { readIconPosition } from '#lib/desktop/iconPosition.js';
+	import type { PortfolioAppId } from '#lib/portfolio/apps.js';
+	import { launcherItems } from '#lib/portfolio/launcher.js';
 	import { copy, languageStorageKey, readLanguage, type Language } from '#lib/language.js';
 
 	const embedded = page.url.searchParams.has('embedded');
@@ -13,6 +18,32 @@
 	let recentApps = $state<PortfolioAppId[]>([]);
 	let language = $state<Language>('en');
 	let t = $derived(copy[language]);
+	let launcherWidth = $state(0);
+	let launcherHeight = $state(0);
+	const iconWidth = $derived(Math.floor(launcherWidth / 3));
+	const icons = $derived(launcherItems(language).filter((item) => item.kind === 'app'));
+	const iconHeight = $derived(
+		Math.min(iconSize, Math.floor(launcherHeight / Math.ceil(icons.length / 3)))
+	);
+	const homeIcons = $derived.by(() => {
+		if (view !== 'home' || !iconWidth || !iconHeight) return [];
+		const bounds = { width: launcherWidth, height: launcherHeight };
+		const occupied: { x: number; y: number; width: number; height: number }[] = [];
+		return icons.map((item, index) => {
+			const id = `phone-${item.id}`;
+			const start = { x: (index % 3) * iconWidth, y: Math.floor(index / 3) * iconHeight };
+			const position = placeIcon(
+				readIconPosition(id) ?? start,
+				occupied,
+				bounds,
+				iconWidth,
+				iconHeight,
+				0
+			);
+			occupied.push({ ...position, width: iconWidth, height: iconHeight });
+			return { id, item, ...position };
+		});
+	});
 
 	function openApp(app: PortfolioAppId) {
 		recentApps = [app, ...recentApps.filter((recent) => recent !== app)];
@@ -37,8 +68,9 @@
 			if (event.key === languageStorageKey) language = event.newValue === 'nl' ? 'nl' : 'en';
 		};
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === 'Escape' && embedded)
-				window.parent.postMessage({ type: 'portfolio-exit' }, location.origin);
+			if (event.key !== 'Escape' || event.repeat) return;
+			if (embedded) window.parent.postMessage({ type: 'portfolio-exit' }, location.origin);
+			else void goto(resolve('/'));
 		};
 		window.addEventListener('storage', onStorage);
 		window.addEventListener('keydown', onKeyDown);
@@ -54,7 +86,10 @@
 	<meta name="description" content="Chris Louwerse's mobile portfolio." />
 </svelte:head>
 
-<main class="flex h-screen min-h-0 flex-col overflow-hidden bg-[#f3f8ff] text-[#10223d]">
+<main
+	data-locked-viewport={embedded || undefined}
+	class="flex h-dvh min-h-0 flex-col overflow-clip bg-[#f3f8ff] text-[#10223d]"
+>
 	{#if !embedded}
 		<a href={resolve('/')} class="px-6 py-3 text-sm font-semibold text-blue-800 underline"
 			>{t.backToDesk}</a
@@ -62,25 +97,31 @@
 	{/if}
 	{#if view === 'home'}
 		<div
-			class="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto bg-[#5b9df0] p-6"
+			bind:clientWidth={launcherWidth}
+			bind:clientHeight={launcherHeight}
+			class="relative min-h-0 flex-1 overflow-hidden bg-[#5b9df0]"
 		>
-			{#each portfolioApps as app (app)}
-				<button
-					type="button"
-					onclick={() => openApp(app)}
-					class="flex cursor-pointer flex-col items-center gap-2 rounded-xl p-2 text-sm font-semibold hover:bg-white/30 focus-visible:outline-2 focus-visible:outline-blue-900"
-				>
-					<span
-						aria-hidden="true"
-						class="grid size-14 place-items-center rounded-xl bg-white text-2xl font-bold text-blue-700 shadow"
-						>{t[app][0]}</span
-					>
-					{t[app]}
-				</button>
+			{#each homeIcons as { id, item, x, y } (id)}
+				<DesktopIcon
+					{id}
+					{item}
+					dragHint={t.dragHint}
+					unavailableHint={t.shortcutUnavailable}
+					darkMode={false}
+					startX={x}
+					startY={y}
+					width={iconWidth}
+					height={iconHeight}
+					gap={0}
+					onOpenApp={openApp}
+				/>
 			{/each}
 		</div>
 	{:else if view === 'history'}
-		<section class="min-h-0 flex-1 overflow-y-auto bg-[#e7f0ff] p-6" aria-label={t.phoneHistory}>
+		<section
+			class="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#e7f0ff] p-6"
+			aria-label={t.phoneHistory}
+		>
 			<h1 class="text-xl font-bold">{t.phoneHistory}</h1>
 			{#each recentApps as app (app)}
 				<button
