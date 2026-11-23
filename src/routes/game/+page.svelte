@@ -3,7 +3,6 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import RunnerGame from '#lib/components/RunnerGame.svelte';
 	import { copy, languageStorageKey, readLanguage, type Language } from '#lib/language.js';
 
 	const embedded = page.url.searchParams.has('embedded');
@@ -19,19 +18,24 @@
 		const onStorage = (event: StorageEvent) => {
 			if (event.key === languageStorageKey) language = event.newValue === 'nl' ? 'nl' : 'en';
 		};
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') backToDesk();
+		};
 		window.addEventListener('storage', onStorage);
-		return () => window.removeEventListener('storage', onStorage);
+		window.addEventListener('keydown', onKeyDown);
+		return () => {
+			window.removeEventListener('storage', onStorage);
+			window.removeEventListener('keydown', onKeyDown);
+		};
 	});
 </script>
 
 <svelte:head>
-	<title>{t.runnerTitle} | Chris Louwerse</title>
-	<meta name="description" content="Play a small dinosaur runner in Chris Louwerse's portfolio." />
+	<title>{t.embeddedZoom} | Chris Louwerse</title>
+	<meta name="description" content="The embedded display in Chris Louwerse's portfolio." />
 </svelte:head>
 
-<main
-	class={`flex min-h-screen flex-col bg-[#e7f0ff] ${embedded ? 'h-screen overflow-hidden px-2 py-2' : 'px-4 py-5 sm:px-8'}`}
->
+<main class="flex min-h-screen flex-col bg-[#101922] p-4 text-[#c4f5df]">
 	{#if !embedded}
 		<button
 			type="button"
@@ -40,7 +44,7 @@
 			>← {t.backToDesk}</button
 		>
 	{/if}
-	<div class={`flex flex-1 items-center justify-center ${embedded ? 'min-h-0 py-2' : 'py-8'}`}>
-		<RunnerGame {language} compact={embedded} />
+	<div class="grid flex-1 place-items-center">
+		<p class="font-mono text-2xl font-semibold">Hello, world!</p>
 	</div>
 </main>

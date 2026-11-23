@@ -39,16 +39,16 @@ VS Code will suggest the extensions listed in `.vscode/extensions.json` when thi
 | `src/lib/scene/projectElementToQuad.ts`         | Fits device iframes and card HTML to their projected corners.               |
 | `src/lib/scene/deviceScreens.ts`                | Laptop, phone, and embedded screen dimensions.                              |
 | `src/routes/desktop/+page.svelte`               | Desktop icon placement, taskbar, and portfolio window state.                |
-| `src/routes/phone/+page.svelte`                 | Phone-sized portfolio using the shared portfolio content.                   |
+| `src/routes/phone/+page.svelte`                 | Phone launcher, app history, and fullscreen apps.                           |
 | `src/lib/desktop/windowToIcon.ts`               | Portfolio window opening and closing animation.                             |
 | `src/lib/components/DesktopIcon.svelte`         | Desktop icon dragging, hover animation, and click behavior.                 |
 | `src/lib/game/runner.ts`                        | Runner physics, obstacles, scoring, and collision logic.                    |
 | `src/lib/components/RunnerGame.svelte`          | Reusable runner canvas and press-to-continue controls.                      |
-| `src/routes/game/+page.svelte`                  | Runner page shown on the embedded device and available directly.            |
+| `src/routes/game/+page.svelte`                  | Embedded display showing `Hello, world!` while the runner is shelved.       |
 | `src/lib/desktop/iconLayout.ts`                 | Keeps desktop icons apart when loaded or dropped.                           |
 | `src/lib/desktop/`                              | Saved icon positions and portfolio window mode.                             |
 | `src/lib/components/PortfolioWindow.svelte`     | Portfolio window frame, title bar, and resize controls.                     |
-| `src/lib/components/PortfolioContent.svelte`    | Portfolio navigation and page content; start here to redesign the pages.    |
+| `src/lib/components/portfolio/`                 | Shared Skills, About, Contact, and Projects pages.                          |
 | `src/app.css`                                   | Tailwind import and window resize handle styles.                            |
 | `static/models/desk-setup.glb`                  | The assembled desk, laptop, lamp, and props.                                |
 | `references/`                                   | Older standalone HTML prototypes, kept outside the public `static` folder.  |
@@ -57,7 +57,7 @@ The scene loads `desk-setup.glb` with the objects in their authored positions. I
 
 The laptop opens `/desktop?closed=1&embedded=1` so visitors see the desktop first. The bottom control opens the phone portfolio below 640px and the laptop portfolio at tablet and desktop widths. Both devices can also be clicked directly. The outer theme follows sunrise and sunset at the KNMI De Bilt location; clicking the lamp or theme button overrides it for the current browser tab session. The laptop and phone portfolio interfaces stay light independently of the outer scene. The top-right sound control remembers its choice. The EN/NL control translates the introduction, tooltips, device pages, window controls, and portfolio copy.
 
-The embedded device shows `/game`, an original dinosaur runner with a press-to-continue start screen, keyboard and touch controls, and a saved best score. The laptop desktop no longer has a Game icon.
+The laptop and phone launch the same four portfolio apps from separate icons. The embedded device shows `Hello, world!` at `/game`. The original runner code is available in `RunnerGame.svelte` and `src/lib/game/runner.ts`.
 
 ## Files not used by the running site
 
@@ -65,6 +65,6 @@ The embedded device shows `/game`, an original dinosaur runner with a press-to-c
 
 ## Next content to add
 
-Replace the starter project description with your actual projects and links. Edit `ContactCard.svelte` for the card markup and profile placeholder, and `src/lib/contact.ts` for the example link destinations. Edit `language.ts` for English and Dutch copy, `PortfolioContent.svelte` for section layout, colors, and typography, and `PortfolioWindow.svelte` for the surrounding window frame. Desktop icons can be dragged within the area above the taskbar. Their positions are saved in browser storage, kept apart, and restored across laptop zooms and reloads. The portfolio window also remembers whether it was maximized. Dragging a maximized window by its title bar restores it to a smaller size, and dragging keeps part of the title bar within the desktop frame. Edit the initial `iconPositions` in `src/routes/desktop/+page.svelte` to change starting locations for visitors without saved positions.
+Replace the starter project description with your actual projects and links. Edit `ContactCard.svelte` for the card markup and profile placeholder, and `src/lib/contact.ts` for the example link destinations. Edit `language.ts` for English and Dutch copy, the pages in `src/lib/components/portfolio/` for app layout, and `PortfolioWindow.svelte` for the surrounding window frame. Desktop icons can be dragged within the area above the taskbar. Their positions are saved in browser storage, kept apart, and restored across laptop zooms and reloads. The portfolio window also remembers whether it was maximized. Dragging a maximized window by its title bar restores it to a smaller size, and dragging keeps part of the title bar within the desktop frame. Edit the initial `iconPositions` in `src/routes/desktop/+page.svelte` to change starting locations for visitors without saved positions.
 
 For a step-by-step guide to adding desk props, hover lift, and tooltips, see [Adding scene objects and interactions](docs/scene-interactions.md).

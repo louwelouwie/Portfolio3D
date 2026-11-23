@@ -15,6 +15,9 @@ export function createCoffeeInteraction(
 	let nextLevel = fromLevel;
 
 	return {
+		get active() {
+			return started !== undefined;
+		},
 		sip(cameraPosition: THREE.Vector3) {
 			if (started !== undefined || !pivot.parent) return;
 			fromLevel = fluid.position.y;

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import PortfolioContent from '#lib/components/PortfolioContent.svelte';
+	import PortfolioApp from '#lib/components/portfolio/PortfolioApp.svelte';
+	import type { PortfolioAppId } from '#lib/portfolio/apps.js';
 	import { windowToIcon } from '#lib/desktop/windowToIcon.js';
 	import { copy, type Language } from '#lib/language.js';
 	type Rectangle = { x: number; y: number; width: number; height: number };
@@ -9,6 +10,8 @@
 	const visibleWidth = 144;
 
 	let {
+		app,
+		projected,
 		darkMode,
 		language,
 		maximized,
@@ -16,6 +19,8 @@
 		onClose,
 		onMinimize
 	}: {
+		app: PortfolioAppId;
+		projected: boolean;
 		darkMode: boolean;
 		language: Language;
 		maximized: boolean;
@@ -100,14 +105,14 @@
 <svelte:window onresize={() => (rect = keepTitlebarInFrame(rect))} />
 
 <section
-	transition:windowToIcon={{ iconId: 'portfolio' }}
+	transition:windowToIcon={{ iconId: app }}
 	class={`portfolio-window absolute z-40 flex flex-col overflow-hidden shadow-2xl ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${gesture ? 'transition-none' : 'transition-[left,top,width,height,border-radius,background-color,color] duration-[380ms]'} ${maximized ? 'rounded-none' : 'rounded-xl'} ${darkMode ? 'bg-[#0c1d35] text-slate-50' : 'bg-white text-[#10223d]'}`}
 	class:maximized
 	style={`left:${maximized ? 0 : rect.x}px;top:${maximized ? 0 : rect.y}px;width:${maximized ? '100vw' : `${rect.width}px`};height:${maximized ? 'calc(100vh - 3rem)' : `${rect.height}px`};`}
 	onpointermove={moveGesture}
 	onpointerup={() => (gesture = undefined)}
 	onpointercancel={() => (gesture = undefined)}
-	aria-label={t.portfolio}
+	aria-label={t[app]}
 >
 	<header
 		class={`border-b transition-colors duration-500 select-none ${darkMode ? 'border-blue-300/20 bg-[#17345a] text-white' : 'border-blue-200 bg-[#dceafb] text-[#10223d]'}`}
@@ -117,9 +122,9 @@
 			onpointerdown={(event) => startGesture(event, 'drag')}
 			role="toolbar"
 			tabindex="-1"
-			aria-label={t.portfolio}
+			aria-label={t[app]}
 		>
-			<span class="text-sm font-bold tracking-wide">{t.portfolio}</span>
+			<span class="text-sm font-bold tracking-wide">{t[app]}</span>
 			<div class="ml-auto flex gap-1">
 				<button
 					type="button"
@@ -129,8 +134,8 @@
 					onpointerleave={() => (hoveredAction = null)}
 					onfocus={() => (hoveredAction = 'minimize')}
 					onblur={() => (hoveredAction = null)}
-					aria-label={t.minimizePortfolio}
-					title={t.minimizePortfolio}
+					aria-label={t.minimizeWindow}
+					title={t.minimizeWindow}
 					class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md transition-[background-color,color,scale] duration-200 focus-visible:outline-2 focus-visible:outline-blue-500"
 					style={`background-color:${hoveredAction === 'minimize' ? (darkMode ? '#355e91' : '#2563eb') : 'transparent'};color:${hoveredAction === 'minimize' ? 'white' : 'inherit'};scale:${hoveredAction === 'minimize' ? '1.1' : '1'};`}
 					><svg
@@ -150,8 +155,8 @@
 					onpointerleave={() => (hoveredAction = null)}
 					onfocus={() => (hoveredAction = 'resize')}
 					onblur={() => (hoveredAction = null)}
-					aria-label={maximized ? t.restorePortfolio : t.maximizePortfolio}
-					title={maximized ? t.restorePortfolio : t.maximizePortfolio}
+					aria-label={maximized ? t.restoreWindow : t.maximizeWindow}
+					title={maximized ? t.restoreWindow : t.maximizeWindow}
 					class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md transition-[background-color,color,scale] duration-200 focus-visible:outline-2 focus-visible:outline-blue-500"
 					style={`background-color:${hoveredAction === 'resize' ? (darkMode ? '#355e91' : '#2563eb') : 'transparent'};color:${hoveredAction === 'resize' ? 'white' : 'inherit'};scale:${hoveredAction === 'resize' ? '1.1' : '1'};`}
 					><svg
@@ -166,7 +171,7 @@
 				<button
 					type="button"
 					onclick={onClose}
-					aria-label={t.closePortfolio}
+					aria-label={t.closeWindow}
 					class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md transition-colors duration-200 hover:bg-red-600 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-500"
 					><svg
 						aria-hidden="true"
@@ -192,12 +197,12 @@
 			>
 			<span
 				class={`min-w-0 flex-1 truncate rounded-md border px-3 py-1 font-medium ${darkMode ? 'border-blue-300/20 bg-[#254467] text-blue-50' : 'border-blue-100 bg-white text-[#203c62]'}`}
-				>c-louwerse.com / portfolio</span
+				>c-louwerse.com / {app}</span
 			>
 		</div>
 	</header>
 
-	<PortfolioContent {darkMode} {language} />
+	<PortfolioApp {app} {language} {projected} />
 
 	{#if !maximized}
 		{#each ['t', 'b', 'l', 'r', 'tl', 'tr', 'bl', 'br'] as edge (edge)}

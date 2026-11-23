@@ -237,6 +237,7 @@ export function createPortfolioScene(
 	const foregroundBounds = new THREE.Box3();
 	let foregroundReady = false;
 	let focusReady = false;
+	let restingDevice = false;
 	let lift = 0;
 	let lampLift = 0;
 	let phoneLift = 0;
@@ -293,6 +294,7 @@ export function createPortfolioScene(
 	let lampBulbMaterial: THREE.MeshStandardMaterial | undefined;
 	let disposed = false;
 	let frameId = 0;
+	let lastFrameTime = performance.now();
 	const raycaster = new THREE.Raycaster();
 	const pointer = new THREE.Vector2();
 	const screenPosition = new THREE.Vector3();
@@ -449,6 +451,7 @@ export function createPortfolioScene(
 		{ playSound = false, manual = false }: ThemeChangeOptions = {}
 	) => {
 		if (darkMode === next) return;
+		restingDevice = false;
 		if (playSound && soundEnabled) void lampSound.play(next);
 		themeFrom = themeAmount;
 		themeStarted = performance.now();
@@ -473,6 +476,7 @@ export function createPortfolioScene(
 			return;
 		}
 		focusRequested = null;
+		restingDevice = false;
 		if (isForegroundTarget(next) && !activePresentation) {
 			const motion = next === 'card' ? cardPresentation : printerPaper?.presentation;
 			if (!motion) return;
@@ -599,16 +603,19 @@ export function createPortfolioScene(
 	const onResize = () => {
 		const { clientWidth: width, clientHeight: height } = container;
 		if (!width || !height) return;
+		restingDevice = false;
 		camera.aspect = width / height;
 		camera.updateProjectionMatrix();
 		renderer.setSize(width, height);
 	};
+	const onContextRestored = () => (restingDevice = false);
 	canvas.style.cursor = 'grab';
 	canvas.addEventListener('pointerdown', onPointerDown);
 	canvas.addEventListener('pointermove', onPointerMove);
 	canvas.addEventListener('pointerup', onPointerUp);
 	canvas.addEventListener('pointercancel', onPointerCancel);
 	canvas.addEventListener('pointerleave', onPointerLeave);
+	canvas.addEventListener('webglcontextrestored', onContextRestored);
 	const resizeObserver = new ResizeObserver(onResize);
 	resizeObserver.observe(container);
 	onResize();
@@ -798,6 +805,11 @@ export function createPortfolioScene(
 		if (disposed) return;
 		frameId = requestAnimationFrame(render);
 		const now = performance.now();
+		const elapsedFrames = Math.min(now - lastFrameTime, 100) / (1000 / 60);
+		lastFrameTime = now;
+		if (restingDevice) return;
+		const ease = (factor: number) => 1 - (1 - factor) ** elapsedFrames;
+		const liftEase = ease(0.08);
 		if (deskPopGroup) pop.update(deskPopGroup, now);
 		let lampPop = 1;
 		for (const group of propPopGroups) {
@@ -806,7 +818,11 @@ export function createPortfolioScene(
 		}
 		coffee?.update(now);
 		if (lamp) {
-			lampLift = THREE.MathUtils.lerp(lampLift, hovered === 'lamp' && !focused ? 0.012 : 0, 0.08);
+			lampLift = THREE.MathUtils.lerp(
+				lampLift,
+				hovered === 'lamp' && !focused ? 0.012 : 0,
+				liftEase
+			);
 			lamp.position.y = lampStartY + lampLift;
 			lampLight.position.y = lampLightStartY + lampLift;
 		}
@@ -816,7 +832,7 @@ export function createPortfolioScene(
 				hovered === 'phone' || focused === 'phone' || (lastFocused === 'phone' && focusAmount > 0)
 					? FLAT_DEVICE_LIFT
 					: 0,
-				0.08
+				liftEase
 			);
 			phone.position.y = phoneStartY + phoneLift;
 		}
@@ -828,7 +844,7 @@ export function createPortfolioScene(
 					(lastFocused === 'embedded' && focusAmount > 0)
 					? FLAT_DEVICE_LIFT
 					: 0,
-				0.08
+				liftEase
 			);
 			embedded.position.y = embeddedStartY + embeddedLift;
 		}
@@ -836,7 +852,7 @@ export function createPortfolioScene(
 			headphonesLift = THREE.MathUtils.lerp(
 				headphonesLift,
 				hovered === 'headphones' && !focused ? 0.012 : 0,
-				0.08
+				liftEase
 			);
 			headphone.position.y = headphoneStartY + headphonesLift;
 			headphoneStand.position.y = standStartY + headphonesLift;
@@ -845,7 +861,7 @@ export function createPortfolioScene(
 			cardHolderLift = THREE.MathUtils.lerp(
 				cardHolderLift,
 				hovered === 'card' && !focused ? 0.012 : 0,
-				0.08
+				liftEase
 			);
 			cardHolder.position.y = cardHolderStartY + cardHolderLift;
 		}
@@ -853,7 +869,7 @@ export function createPortfolioScene(
 			printerLift = THREE.MathUtils.lerp(
 				printerLift,
 				hovered === 'printer' && !focused ? 0.012 : 0,
-				0.08
+				liftEase
 			);
 			printer.position.y = printerStartY + printerLift;
 		}
@@ -890,7 +906,7 @@ export function createPortfolioScene(
 			lift = THREE.MathUtils.lerp(
 				lift,
 				hovered === 'laptop' || focused === 'laptop' ? CAMERA.lift : 0,
-				0.08
+				liftEase
 			);
 			laptop.position.y = laptopStartY + lift;
 			screenMesh.localToWorld(screenPosition.copy(localScreenCenter));
@@ -940,19 +956,19 @@ export function createPortfolioScene(
 					(CAMERA.focusDistance * (narrow ? CAMERA.phoneFocusAspect : CAMERA.desktopFocusAspect)) /
 						camera.aspect
 				);
-				yaw.position.lerp(screenPosition, 0.1);
+				yaw.position.lerp(screenPosition, ease(0.1));
 				cameraDistance = THREE.MathUtils.lerp(CAMERA.overviewDistance, laptopDistance, focusAmount);
 				const cursorWeight =
 					focused || activePresentation || reducedMotion.matches ? 0 : 1 - focusAmount;
 				yaw.rotation.y = THREE.MathUtils.lerp(
 					yaw.rotation.y,
 					targetYaw * (1 - focusAmount) + cursorOffset.x * cursorWeight,
-					CAMERA.rotationLerp
+					ease(CAMERA.rotationLerp)
 				);
 				pitch.rotation.x = THREE.MathUtils.lerp(
 					pitch.rotation.x,
 					targetPitch * (1 - focusAmount) + cursorOffset.y * cursorWeight,
-					CAMERA.rotationLerp
+					ease(CAMERA.rotationLerp)
 				);
 				const cameraHeight = THREE.MathUtils.lerp(
 					narrow ? CAMERA.phoneOverviewHeight : CAMERA.overviewHeight,
@@ -1019,6 +1035,31 @@ export function createPortfolioScene(
 			onFocusReady();
 		}
 		onFrame();
+		// Leave the projected iframe alone once the camera and hover lifts have settled.
+		// Repainting WebGL and repositioning the frame during scrolling competes with browser input.
+		if (
+			focused &&
+			!isForegroundTarget(focused) &&
+			focusReady &&
+			themeProgress === 1 &&
+			!coffee?.active
+		) {
+			const near = (value: number, target = 0) => Math.abs(value - target) < 0.00002;
+			const propsSettled =
+				near(lift, focused === 'laptop' ? CAMERA.lift : 0) &&
+				near(phoneLift, focused === 'phone' ? FLAT_DEVICE_LIFT : 0) &&
+				near(embeddedLift, focused === 'embedded' ? FLAT_DEVICE_LIFT : 0) &&
+				near(lampLift) &&
+				near(headphonesLift) &&
+				near(cardHolderLift) &&
+				near(printerLift);
+			const cameraSettled =
+				focused !== 'laptop' ||
+				(near(yaw.rotation.y) &&
+					near(pitch.rotation.x) &&
+					yaw.position.distanceTo(screenPosition) < 0.00002);
+			restingDevice = propsSettled && cameraSettled;
+		}
 	};
 	render();
 
@@ -1092,6 +1133,7 @@ export function createPortfolioScene(
 			canvas.removeEventListener('pointerup', onPointerUp);
 			canvas.removeEventListener('pointercancel', onPointerCancel);
 			canvas.removeEventListener('pointerleave', onPointerLeave);
+			canvas.removeEventListener('webglcontextrestored', onContextRestored);
 			if (desk) disposeModel(desk);
 			lampSound.dispose();
 			lampLight.shadow.dispose();

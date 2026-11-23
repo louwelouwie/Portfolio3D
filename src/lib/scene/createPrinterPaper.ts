@@ -4,6 +4,9 @@ import {
 	type SurfaceCorners
 } from './createForegroundPresentation.js';
 
+// The CV is a portrait A4 page.
+const CV_ASPECT = 210 / 297;
+
 export function createPrinterPaper(
 	printer: THREE.Mesh,
 	paper: THREE.Mesh,
@@ -23,18 +26,29 @@ export function createPrinterPaper(
 		back = Math.min(back, positions.getZ(index));
 		front = Math.max(front, positions.getZ(index));
 	}
-	const margin = 0.006;
-	const left = paperBounds.min.x + margin;
-	const right = paperBounds.max.x - margin;
-	back += margin;
-	front -= margin;
+	const left = paperBounds.min.x;
+	const right = paperBounds.max.x;
 	if (front <= back || right <= left) return;
-	const corners: SurfaceCorners = [
-		new THREE.Vector3(left, topY, back),
-		new THREE.Vector3(right, topY, back),
-		new THREE.Vector3(right, topY, front),
-		new THREE.Vector3(left, topY, front)
+	const face = (leftX: number, rightX: number, backZ: number, frontZ: number): SurfaceCorners => [
+		new THREE.Vector3(leftX, topY, backZ),
+		new THREE.Vector3(rightX, topY, backZ),
+		new THREE.Vector3(rightX, topY, frontZ),
+		new THREE.Vector3(leftX, topY, frontZ)
 	];
+	const width = (right - left) * paper.scale.x;
+	const length = (front - back) * paper.scale.z;
+	const printWidth = Math.min(width, length * CV_ASPECT);
+	const printLength = printWidth / CV_ASPECT;
+	const centerX = (left + right) / 2;
+	const centerZ = (back + front) / 2;
+	const halfWidth = printWidth / (2 * paper.scale.x);
+	const halfLength = printLength / (2 * paper.scale.z);
+	const corners = face(
+		centerX - halfWidth,
+		centerX + halfWidth,
+		centerZ - halfLength,
+		centerZ + halfLength
+	);
 	const slot = printerBounds.max.z;
 	paper.position.z = slot + 0.006 - paperBounds.max.z * paper.scale.z;
 	const ejectDistance = slot + 0.008 - (paper.position.z + paperBounds.min.z * paper.scale.z);
@@ -45,8 +59,8 @@ export function createPrinterPaper(
 	return {
 		mesh: paper,
 		corners,
-		aspect: ((right - left) * paper.scale.x) / ((front - back) * paper.scale.z),
-		presentation: createForegroundPresentation(paper, corners, foreground, {
+		aspect: CV_ASPECT,
+		presentation: createForegroundPresentation(paper, face(left, right, back, front), foreground, {
 			ejectDistance,
 			verticalFill: 0.7
 		})

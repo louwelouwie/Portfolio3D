@@ -48,6 +48,7 @@
 	let laptopScreen = $state<HTMLIFrameElement>();
 	let phoneScreen = $state<HTMLIFrameElement>();
 	let embeddedScreen = $state<HTMLIFrameElement>();
+	const screenTransforms = new WeakMap<HTMLIFrameElement, string>();
 	let paperPreview = $state<HTMLIFrameElement>();
 	let cardElements = $state<Partial<Record<CardMeshName, HTMLDivElement>>>({});
 	let cardInForeground = $state(false);
@@ -92,7 +93,11 @@
 		const quad = scene.getScreenQuad(target);
 		if (!quad) return;
 		const { width, height } = DEVICE_SCREENS[target];
-		iframe.style.transform = projectElementToQuad(quad, width, height);
+		const transform = projectElementToQuad(quad, width, height);
+		if (screenTransforms.get(iframe) !== transform) {
+			iframe.style.transform = transform;
+			screenTransforms.set(iframe, transform);
+		}
 		screenReady[target] = true;
 	}
 
@@ -228,7 +233,7 @@
 		<canvas
 			bind:this={canvas}
 			class="block h-full w-full touch-none"
-			aria-label="Interactive 3D desk with a laptop, phone, game device, lamp, and printer"
+			aria-label="Interactive 3D desk with a laptop, phone, embedded display, lamp, and printer"
 		></canvas>
 	</div>
 	<HeroHeader {darkMode} focused={focused !== null} {language} />
@@ -334,7 +339,7 @@
 		<iframe
 			bind:this={embeddedScreen}
 			src={`${resolve('/game')}?embedded=1`}
-			title="Embedded game"
+			title={t.embeddedZoom}
 			aria-hidden={focused !== 'embedded'}
 			tabindex={focused === 'embedded' && closeupReady ? undefined : -1}
 			class={`absolute top-0 left-0 border-0 transition-opacity duration-500 motion-reduce:transition-none ${screenReady.embedded ? 'visible' : 'invisible'} ${focused && focused !== 'embedded' ? 'opacity-0' : 'opacity-100'} ${focused === 'embedded' && closeupReady ? 'pointer-events-auto' : 'pointer-events-none'}`}

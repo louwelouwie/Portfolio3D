@@ -19,17 +19,23 @@
 	} from '#lib/language.js';
 	import { readIconPosition, type IconPosition } from '#lib/desktop/iconPosition.js';
 	import { iconSize, placeIcon } from '#lib/desktop/iconLayout.js';
+	import { portfolioApps, type PortfolioAppId } from '#lib/portfolio/apps.js';
 
 	const embedded = page.url.searchParams.has('embedded');
 	// The laptop desktop has its own fixed light theme; the lamp changes only the outer scene.
 	const darkMode = false;
 	let language = $state<Language>('en');
 	let t = $derived(copy[language]);
-	let iconPositions = $state<Record<'bin' | 'portfolio', IconPosition>>({
+	let iconPositions = $state<Record<'bin' | PortfolioAppId, IconPosition>>({
 		bin: { x: 24, y: 24 },
-		portfolio: { x: 140, y: 24 }
+		skills: { x: 140, y: 24 },
+		about: { x: 256, y: 24 },
+		contact: { x: 372, y: 24 },
+		projects: { x: 488, y: 24 }
 	});
-	let windowOpen = $state(!page.url.searchParams.has('closed'));
+	let windowApp = $state<PortfolioAppId | null>(
+		page.url.searchParams.has('closed') ? null : 'projects'
+	);
 	let minimized = $state(false);
 	let windowMaximized = $state(true);
 	let desktopReady = $state(false);
@@ -39,7 +45,7 @@
 		language = readLanguage();
 		const occupied: (IconPosition & { width: number; height: number })[] = [];
 		const next = { ...iconPositions };
-		for (const id of ['bin', 'portfolio'] as const) {
+		for (const id of ['bin', ...portfolioApps] as const) {
 			const position = placeIcon(readIconPosition(id) ?? iconPositions[id], occupied, {
 				width: window.innerWidth,
 				height: window.innerHeight - 48
@@ -66,15 +72,9 @@
 			window.removeEventListener('keydown', onKeyDown);
 		};
 	});
-	const openPortfolio = () => {
-		windowOpen = true;
+	const toggleApp = (app: PortfolioAppId) => {
+		windowApp = windowApp === app && !minimized ? null : app;
 		minimized = false;
-	};
-	const togglePortfolio = () => {
-		if (windowOpen && !minimized) {
-			windowOpen = false;
-			minimized = false;
-		} else openPortfolio();
 	};
 	const setWindowMaximized = (value: boolean) => {
 		windowMaximized = value;
@@ -124,43 +124,49 @@
 				startX={iconPositions.bin.x}
 				startY={iconPositions.bin.y}
 			/>
-			<DesktopIcon
-				id="portfolio"
-				label={t.portfolio}
-				dragHint={t.dragHint}
-				letter="P"
-				{darkMode}
-				startX={iconPositions.portfolio.x}
-				startY={iconPositions.portfolio.y}
-				onActivate={togglePortfolio}
-			/>
+			{#each portfolioApps as app (app)}
+				<DesktopIcon
+					id={app}
+					label={t[app]}
+					dragHint={t.dragHint}
+					letter={t[app][0]}
+					{darkMode}
+					startX={iconPositions[app].x}
+					startY={iconPositions[app].y}
+					onActivate={() => toggleApp(app)}
+				/>
+			{/each}
 		</div>
 	{/if}
 
-	{#if desktopReady && windowOpen && !minimized}
-		<PortfolioWindow
-			{darkMode}
-			{language}
-			maximized={windowMaximized}
-			onMaximizedChange={setWindowMaximized}
-			onClose={() => {
-				windowOpen = false;
-				minimized = false;
-			}}
-			onMinimize={() => (minimized = true)}
-		/>
+	{#if desktopReady && windowApp && !minimized}
+		{#key windowApp}
+			<PortfolioWindow
+				app={windowApp}
+				projected={embedded}
+				{darkMode}
+				{language}
+				maximized={windowMaximized}
+				onMaximizedChange={setWindowMaximized}
+				onClose={() => (windowApp = null)}
+				onMinimize={() => (minimized = true)}
+			/>
+		{/key}
 	{/if}
 
 	<footer
 		class="absolute right-0 bottom-0 left-0 z-50 flex h-12 items-center gap-3 border-t border-blue-100 bg-white px-4 text-[#10223d] shadow-lg"
 	>
-		<button
-			type="button"
-			onclick={togglePortfolio}
-			class="cursor-pointer rounded-lg px-3 py-1 font-semibold hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600"
-			aria-label={windowOpen && !minimized ? t.closePortfolio : t.openPortfolio}
-			>{t.portfolio}</button
-		>
+		{#if windowApp}
+			{@const app = windowApp}
+			<button
+				type="button"
+				onclick={() => toggleApp(app)}
+				aria-pressed={!minimized}
+				class="cursor-pointer rounded-lg px-3 py-1 font-semibold hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600"
+				>{t[app]}</button
+			>
+		{/if}
 		{#if !embedded}
 			<button
 				type="button"
