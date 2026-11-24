@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { copy, type Language } from '#lib/language.js';
 	import type { FocusTarget, HoverTarget } from '#lib/scene/createPortfolioScene.js';
+	import { animateControlPress } from './animateControlPress.js';
 
 	let {
 		darkMode,
@@ -24,6 +25,7 @@
 <nav aria-label={t.objectControls} class="flex items-center">
 	<button
 		type="button"
+		use:animateControlPress
 		aria-label={label}
 		title={label}
 		onclick={onTogglePortfolio}

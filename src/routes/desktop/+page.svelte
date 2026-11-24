@@ -44,6 +44,7 @@
 	let windowApp = $state<PortfolioAppId | null>(
 		page.url.searchParams.has('closed') ? null : 'projects'
 	);
+	let windowOrigin = $state<PortfolioAppId>('projects');
 	let minimized = $state(false);
 	let windowMaximized = $state(true);
 	let desktopReady = $state(false);
@@ -87,6 +88,7 @@
 	});
 	const toggleApp = (app: PortfolioAppId) => {
 		windowApp = windowApp === app && !minimized ? null : app;
+		if (windowApp) windowOrigin = app;
 		minimized = false;
 	};
 	const setWindowMaximized = (value: boolean) => {
@@ -146,13 +148,15 @@
 	{/if}
 
 	{#if desktopReady && windowApp && !minimized}
-		{#key windowApp}
+		{#key windowOrigin}
 			<PortfolioWindow
 				app={windowApp}
+				origin={windowOrigin}
 				projected={embedded}
 				{darkMode}
 				{language}
 				maximized={windowMaximized}
+				onNavigate={(app) => (windowApp = app)}
 				onMaximizedChange={setWindowMaximized}
 				onClose={() => (windowApp = null)}
 				onMinimize={() => (minimized = true)}

@@ -3,51 +3,37 @@
 	import { copy, type Language } from '#lib/language.js';
 	let { language }: { language: Language } = $props();
 	const t = $derived(copy[language]);
-	const links = $derived([
+	const email = contactDestination('email');
+	const profiles = [
 		{ label: 'GitHub', href: contactDestination('github') },
-		{ label: 'LinkedIn', href: contactDestination('linkedin') },
-		{ label: 'WhatsApp', href: contactDestination('whatsapp') },
-		{ label: t.emailShortcut, href: contactDestination('email') }
-	]);
+		{ label: 'LinkedIn', href: contactDestination('linkedin') }
+	];
 </script>
 
-<h1 class="text-3xl font-bold text-blue-800">{t.contact}</h1>
-<ul class="mt-5 grid max-w-xl gap-3 sm:grid-cols-2">
+<h1 class="text-4xl font-extrabold tracking-tight">{t.connectHeading}</h1>
+<p class="mt-4 max-w-xl leading-relaxed text-slate-700">{t.connectBody}</p>
+
+<div class="mt-6 flex flex-wrap items-center gap-3">
 	<!-- eslint-disable svelte/no-navigation-without-resolve -->
-	{#each links as { label, href } (label)}
-		<li>
-			{#if href}
-				<a
-					{href}
-					target={href.startsWith('mailto:') ? undefined : '_blank'}
-					rel="noopener noreferrer"
-				>
-					{label}
-				</a>
-			{:else}
-				<span
-					class="block rounded-xl border border-blue-100 px-4 py-3 font-semibold text-slate-600"
-				>
-					{label} <small class="ml-1 font-normal">{t.shortcutUnavailable}</small>
-				</span>
-			{/if}
-		</li>
+	{#if email}
+		<a
+			href={email}
+			class="inline-flex min-h-11 items-center rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+		>
+			{t.emailMe}
+		</a>
+	{/if}
+	{#each profiles as { label, href } (label)}
+		{#if href}
+			<a
+				{href}
+				target="_blank"
+				rel="noopener noreferrer"
+				class="inline-flex min-h-11 items-center rounded-lg border border-blue-200 bg-white px-4 text-sm font-semibold text-blue-800 hover:bg-blue-50 focus-visible:outline-2"
+			>
+				{label}
+			</a>
+		{/if}
 	{/each}
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
-</ul>
-
-<style>
-	a {
-		display: block;
-		padding: 0.75rem 1rem;
-		border: 1px solid #bfdbfe;
-		border-radius: 0.75rem;
-		background: white;
-		font-weight: 600;
-	}
-
-	a:hover,
-	a:focus-visible {
-		background: #dbeafe;
-	}
-</style>
+</div>

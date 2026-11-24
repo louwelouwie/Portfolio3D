@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { copy, type Language } from '#lib/language.js';
 	import type { HoverTarget } from '#lib/scene/createPortfolioScene.js';
+	import { animateControlPress } from './animateControlPress.js';
 
 	let {
 		darkMode,
@@ -32,6 +33,7 @@
 >
 	<button
 		type="button"
+		use:animateControlPress
 		aria-label={darkMode ? t.lightMode : t.darkMode}
 		title={darkMode ? t.lightMode : t.darkMode}
 		onclick={onToggleTheme}
@@ -45,7 +47,7 @@
 			stroke-width="2"
 			class="h-4 w-4"
 		>
-			{#if darkMode}<path d="M20 15.3A8 8 0 0 1 8.7 4a8 8 0 1 0 11.3 11.3Z" />{:else}<circle
+			{#if !darkMode}<path d="M20 15.3A8 8 0 0 1 8.7 4a8 8 0 1 0 11.3 11.3Z" />{:else}<circle
 					cx="12"
 					cy="12"
 					r="4"
@@ -56,6 +58,7 @@
 	</button>
 	<button
 		type="button"
+		use:animateControlPress
 		aria-label={soundEnabled ? t.soundOn : t.soundOff}
 		aria-pressed={soundEnabled}
 		title={soundEnabled ? t.soundOn : t.soundOff}
@@ -76,6 +79,7 @@
 	</button>
 	<button
 		type="button"
+		use:animateControlPress
 		aria-label={t.changeLanguage}
 		title={t.changeLanguage}
 		onclick={onToggleLanguage}

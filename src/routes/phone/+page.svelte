@@ -7,6 +7,7 @@
 	import PortfolioApp from '#lib/components/portfolio/PortfolioApp.svelte';
 	import { iconSize, placeIcon } from '#lib/desktop/iconLayout.js';
 	import { readIconPosition } from '#lib/desktop/iconPosition.js';
+	import { windowToIcon } from '#lib/desktop/windowToIcon.js';
 	import type { PortfolioAppId } from '#lib/portfolio/apps.js';
 	import { launcherItems } from '#lib/portfolio/launcher.js';
 	import { copy, languageStorageKey, readLanguage, type Language } from '#lib/language.js';
@@ -14,8 +15,15 @@
 	const embedded = page.url.searchParams.has('embedded');
 	type PhoneView = 'home' | PortfolioAppId;
 	let view = $state<PhoneView | 'history'>('home');
+	let appOrigin = $state<PortfolioAppId>('skills');
 	let beforeHistory: PhoneView = 'home';
 	let recentApps = $state<PortfolioAppId[]>([]);
+	let appScroll = $state<Record<PortfolioAppId, number>>({
+		skills: 0,
+		about: 0,
+		contact: 0,
+		projects: 0
+	});
 	let language = $state<Language>('en');
 	let t = $derived(copy[language]);
 	let launcherWidth = $state(0);
@@ -26,7 +34,7 @@
 		Math.min(iconSize, Math.floor(launcherHeight / Math.ceil(icons.length / 3)))
 	);
 	const homeIcons = $derived.by(() => {
-		if (view !== 'home' || !iconWidth || !iconHeight) return [];
+		if (!iconWidth || !iconHeight) return [];
 		const bounds = { width: launcherWidth, height: launcherHeight };
 		const occupied: { x: number; y: number; width: number; height: number }[] = [];
 		return icons.map((item, index) => {
@@ -46,6 +54,11 @@
 	});
 
 	function openApp(app: PortfolioAppId) {
+		appOrigin = app;
+		navigateApp(app);
+	}
+
+	function navigateApp(app: PortfolioAppId) {
 		recentApps = [app, ...recentApps.filter((recent) => recent !== app)];
 		view = app;
 	}
@@ -95,11 +108,12 @@
 			>{t.backToDesk}</a
 		>
 	{/if}
-	{#if view === 'home'}
+	<div class="relative isolate min-h-0 flex-1 overflow-hidden">
 		<div
 			bind:clientWidth={launcherWidth}
 			bind:clientHeight={launcherHeight}
-			class="relative min-h-0 flex-1 overflow-hidden bg-[#5b9df0]"
+			inert={view !== 'home'}
+			class="absolute inset-0 isolate overflow-hidden bg-[#5b9df0]"
 		>
 			{#each homeIcons as { id, item, x, y } (id)}
 				<DesktopIcon
@@ -117,29 +131,35 @@
 				/>
 			{/each}
 		</div>
-	{:else if view === 'history'}
-		<section
-			class="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#e7f0ff] p-6"
-			aria-label={t.phoneHistory}
-		>
-			<h1 class="text-xl font-bold">{t.phoneHistory}</h1>
-			{#each recentApps as app (app)}
-				<button
-					type="button"
-					onclick={() => openApp(app)}
-					class="mt-4 w-full cursor-pointer rounded-xl border border-blue-200 bg-white p-4 text-left font-semibold hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-700"
-					>{t[app]}</button
+		{#if view === 'history'}
+			<section
+				class="absolute inset-0 overflow-y-auto overscroll-contain bg-[#e7f0ff] p-6"
+				aria-label={t.phoneHistory}
+			>
+				<h1 class="text-xl font-bold">{t.phoneHistory}</h1>
+				{#each recentApps as app (app)}
+					<button
+						type="button"
+						onclick={() => openApp(app)}
+						class="mt-4 w-full cursor-pointer rounded-xl border border-blue-200 bg-white p-4 text-left font-semibold hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-700"
+						>{t[app]}</button
+					>
+				{:else}
+					<p class="mt-4 text-sm">{t.phoneNoHistory}</p>
+				{/each}
+			</section>
+		{:else if view !== 'home'}
+			{@const app = view}
+			{#key appOrigin}
+				<div
+					transition:windowToIcon|global={{ iconId: `phone-${appOrigin}` }}
+					class="absolute inset-0 z-10 flex min-h-0 flex-col"
 				>
-			{:else}
-				<p class="mt-4 text-sm">{t.phoneNoHistory}</p>
-			{/each}
-		</section>
-	{/if}
-	{#each recentApps as app (app)}
-		<div class={view === app ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
-			<PortfolioApp {app} {language} />
-		</div>
-	{/each}
+					<PortfolioApp {app} {language} onNavigate={navigateApp} bind:scrollTop={appScroll[app]} />
+				</div>
+			{/key}
+		{/if}
+	</div>
 	<nav
 		class="grid h-14 shrink-0 grid-cols-3 items-center border-t border-blue-100 bg-white"
 		aria-label={t.phoneNavigation}

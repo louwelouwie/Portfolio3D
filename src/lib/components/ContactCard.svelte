@@ -1,6 +1,7 @@
 <!-- Chris Louwerse 23/11/2026 -->
 
 <script lang="ts">
+	import profilePhoto from '#lib/assets/CV-Photo.png';
 	import { contactLinks } from '#lib/contact.js';
 	import { socialIconPaths } from '#lib/socialIcons.js';
 
@@ -37,9 +38,11 @@
 >
 	<div class="flex h-2/5 w-full flex-row items-center gap-3 p-8">
 		<div
-			class="aspect-square h-16 w-16 rounded-full border-2 border-solid border-gray-700 bg-white"
+			class="size-16 shrink-0 overflow-hidden rounded-full border-2 border-gray-700 bg-white"
 			aria-hidden="true"
-		></div>
+		>
+			<img src={profilePhoto} alt="" class="block size-full object-cover" />
+		</div>
 		<div class="flex h-16 w-3/5 flex-col justify-center">
 			<h2 class="text-xl">Chris Louwerse</h2>
 			<p class="text-sm text-gray-200">Software developer · Westervoort</p>
@@ -47,7 +50,7 @@
 	</div>
 
 	<nav
-		class="grid h-3/5 grid-cols-2 p-4 gap-2 items-center justify-center border-t-3 bg-gray-950"
+		class="grid h-3/5 grid-cols-2 items-center justify-center gap-2 border-t-3 bg-gray-950 p-4"
 		aria-label="Contact links"
 	>
 		{#each socials as { name, href, icon } (name)}

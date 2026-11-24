@@ -76,11 +76,15 @@ export const copy = {
 		skills: 'Skills',
 		projects: 'Projects',
 		aboutBody:
-			"I'm Chris Louwerse, a software developer interested in web development and interactive interfaces. I'm using this space to share the projects I build and what I learn along the way.",
-		skillsHeading: 'Skills used here',
-		projectTitle: '3D Portfolio',
-		projectBody:
-			'An interactive portfolio experiment built with SvelteKit and Three.js. The laptop screen contains this portfolio page.'
+			'I build software for the web, mobile devices, and embedded systems. I also use Blender to make 3D assets for my interactive projects.',
+		experience: 'Internships',
+		education: 'Education',
+		viewProject: 'View project',
+		connectHeading: 'Let’s connect',
+		connectBody:
+			'For professional enquiries or collaboration opportunities, please contact me by email.',
+		emailMe: 'Email me',
+		portfolioNavigation: 'Portfolio pages'
 	},
 	nl: {
 		role: 'Softwareontwikkelaar',
@@ -139,10 +143,14 @@ export const copy = {
 		skills: 'Vaardigheden',
 		projects: 'Projecten',
 		aboutBody:
-			'Ik ben Chris Louwerse, een softwareontwikkelaar met interesse in webontwikkeling en interactieve interfaces. Hier deel ik mijn projecten en wat ik onderweg leer.',
-		skillsHeading: 'Vaardigheden in dit project',
-		projectTitle: '3D Portfolio',
-		projectBody:
-			'Een interactief portfolio-experiment gebouwd met SvelteKit en Three.js. Het laptopscherm toont deze portfoliopagina.'
+			'Ik bouw software voor het web, mobiele apparaten en embedded systemen. Voor mijn interactieve projecten maak ik ook 3D-modellen in Blender.',
+		experience: 'Stages',
+		education: 'Opleidingen',
+		viewProject: 'Bekijk project',
+		connectHeading: 'Laten we kennismaken',
+		connectBody:
+			'Voor zakelijke vragen of mogelijkheden tot samenwerking kunt u per e-mail contact met mij opnemen.',
+		emailMe: 'Mail mij',
+		portfolioNavigation: 'Portfoliopagina’s'
 	}
 } as const;

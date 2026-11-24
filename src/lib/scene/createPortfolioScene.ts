@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { asset } from '$app/paths';
 import type { ScreenQuad } from './projectElementToQuad.js';
-import { createLampSound } from './createLampSound.js';
+import { createDeskSound } from './createDeskSound.js';
 import { createCoffeeInteraction } from './createCoffeeInteraction.js';
 import {
 	createForegroundPresentation,
@@ -182,7 +182,7 @@ export function createPortfolioScene(
 	scene.add(foreground);
 	const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 	const pop = createPopAnimation(reducedMotion);
-	const lampSound = createLampSound();
+	const deskSound = createDeskSound(() => soundEnabled);
 	const darkBackground = new THREE.Color(0x14233a);
 	const lightBackground = new THREE.Color(0xe7f0ff);
 	const background = (initialDarkMode ? darkBackground : lightBackground).clone();
@@ -197,12 +197,17 @@ export function createPortfolioScene(
 	yaw.add(pitch);
 	pitch.add(camera);
 	scene.add(yaw);
-	const ambientLight = new THREE.HemisphereLight(0xdce7ff, 0x35394a, initialDarkMode ? 0.6 : 0.85);
+	const dayLighting = { ambient: 0.62, fill: 0.24, sunlight: 1.8 };
+	const ambientLight = new THREE.HemisphereLight(
+		0xdce7ff,
+		0x35394a,
+		initialDarkMode ? 0.6 : dayLighting.ambient
+	);
 	scene.add(ambientLight);
-	const keyLight = new THREE.DirectionalLight(0xf1f5ff, initialDarkMode ? 0.65 : 0.35);
+	const keyLight = new THREE.DirectionalLight(0xf1f5ff, initialDarkMode ? 0.65 : dayLighting.fill);
 	keyLight.position.set(3, 10, 10);
 	scene.add(keyLight);
-	const daylight = new THREE.DirectionalLight(0xfff6e8, initialDarkMode ? 0 : 1.5);
+	const daylight = new THREE.DirectionalLight(0xffe9c5, initialDarkMode ? 0 : dayLighting.sunlight);
 	daylight.castShadow = true;
 	daylight.shadow.mapSize.set(2048, 2048);
 	daylight.shadow.camera.left = -1;
@@ -250,14 +255,15 @@ export function createPortfolioScene(
 	let targetPitch = 0;
 	let targetPan = 0;
 	const viewTarget = new THREE.Vector3();
-	const touchPoints = new Map<number, number>();
-	let panning = false;
+	const touchPoints = new Map<number, { x: number; y: number }>();
+	let multiTouch: 'desk' | 'paper' | null = null;
 	let touchPreview = false;
 	let touchPreviewTimer: ReturnType<typeof setTimeout> | undefined;
 	const cursorOffset = new THREE.Vector2();
 	const foregroundRotation = new THREE.Euler(0, 0, 0, 'YXZ');
 	const foregroundQuaternion = new THREE.Quaternion();
 	const foregroundBounds = new THREE.Box3();
+	const paperView = { zoom: 1, pan: new THREE.Vector2() };
 	let foregroundReady = false;
 	let focusReady = false;
 	let restingDevice = false;
@@ -268,6 +274,8 @@ export function createPortfolioScene(
 	let headphonesLift = 0;
 	let cardHolderLift = 0;
 	let printerLift = 0;
+	let coffeeLift = 0;
+	let mugStartY = 0;
 	let laptopStartY = 0;
 	let lampStartY = 0;
 	let phoneStartY = 0;
@@ -475,11 +483,16 @@ export function createPortfolioScene(
 	) => {
 		if (darkMode === next) return;
 		restingDevice = false;
-		if (playSound && soundEnabled) void lampSound.play(next);
+		if (playSound) void deskSound.play(next ? 'lamp-on' : 'lamp-off', true);
 		themeFrom = themeAmount;
 		themeStarted = performance.now();
 		darkMode = next;
 		onThemeChange(next, manual);
+	};
+	const setSoundEnabled = (next: boolean) => {
+		soundEnabled = next;
+		if (!next) deskSound.stop();
+		else if (navigator.userActivation?.isActive) void deskSound.unlock();
 	};
 	const endDrag = () => {
 		if (activePointer !== undefined && canvas.hasPointerCapture(activePointer))
@@ -491,17 +504,39 @@ export function createPortfolioScene(
 		targetPan = THREE.MathUtils.clamp(targetPan + distance, -CAMERA.panLimit, CAMERA.panLimit);
 		setHovered(null);
 	};
+	const zoomPaper = (factor: number, clientX: number, clientY: number, dx = 0, dy = 0) => {
+		const rect = canvas.getBoundingClientRect();
+		const next = THREE.MathUtils.clamp(paperView.zoom * factor, 1, 4);
+		const ratio = next / paperView.zoom;
+		if (paperView.zoom === 1 && next > 1) foregroundRotation.set(0, 0, 0);
+		paperView.pan.multiplyScalar(ratio);
+		paperView.pan.x +=
+			dx / rect.width + (1 - ratio) * ((clientX - rect.left - dx) / rect.width - 0.5);
+		paperView.pan.y +=
+			dy / rect.height + (1 - ratio) * ((clientY - rect.top - dy) / rect.height - 0.5);
+		paperView.zoom = next;
+	};
+	const onWheel = (event: WheelEvent) => {
+		if (focused !== 'printer' || !foregroundReady) return;
+		event.preventDefault();
+		const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvas.clientHeight : 1;
+		const change = THREE.MathUtils.clamp(-event.deltaY * units * 0.002, -0.55, 0.55);
+		zoomPaper(Math.exp(change), event.clientX, event.clientY);
+	};
+	const onContextMenu = (event: PointerEvent) => {
+		if (event.pointerType === 'touch' || touchPoints.size) event.preventDefault();
+	};
 	const clearTouchPreview = () => {
 		clearTimeout(touchPreviewTimer);
 		touchPreviewTimer = undefined;
 		if (touchPreview) setHovered(null);
 		touchPreview = false;
 	};
-	const finishPanPointer = (pointerId: number) => {
+	const finishTouchPointer = (pointerId: number) => {
 		touchPoints.delete(pointerId);
-		if (!panning) return false;
+		if (!multiTouch) return false;
 		if (touchPoints.size === 0) {
-			panning = false;
+			multiTouch = null;
 			endDrag();
 			canvas.style.cursor = 'grab';
 		}
@@ -525,11 +560,13 @@ export function createPortfolioScene(
 			if (!motion) return;
 			activePresentation = { target: next, motion };
 			foregroundRotation.set(0, 0, 0);
+			paperView.zoom = 1;
+			paperView.pan.set(0, 0);
 		}
 		endDrag();
 		clearTouchPreview();
 		touchPoints.clear();
-		panning = false;
+		multiTouch = null;
 		foregroundReady = false;
 		focusReady = false;
 		cursorOffset.set(0, 0);
@@ -550,11 +587,13 @@ export function createPortfolioScene(
 		onFocusChange(next);
 	};
 	const onPointerDown = (event: PointerEvent) => {
-		if (event.button !== 0) return;
-		if (event.pointerType === 'touch' && !focused) {
-			touchPoints.set(event.pointerId, event.clientX);
+		const touch = event.pointerType === 'touch';
+		if (!touch && event.button !== 0) return;
+		if (navigator.userActivation?.isActive) void deskSound.unlock();
+		if (touch && (!focused || (focused === 'printer' && foregroundReady))) {
+			touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
 			if (touchPoints.size > 1) {
-				panning = true;
+				multiTouch = focused === 'printer' ? 'paper' : 'desk';
 				clearTouchPreview();
 				setHovered(null);
 				canvas.setPointerCapture(event.pointerId);
@@ -573,32 +612,51 @@ export function createPortfolioScene(
 		startY = lastY = event.clientY;
 		canvas.setPointerCapture(event.pointerId);
 		canvas.style.cursor = 'grabbing';
-		if (event.pointerType === 'touch' && !focused) {
-			const target = hitTarget(startX, startY);
-			if (target) {
-				touchPreviewTimer = setTimeout(() => {
-					touchPreview = true;
-					setHovered(target);
-				}, 350);
-			}
+		if (touch && !focused) {
+			const initialTarget = hitTarget(startX, startY);
+			touchPreviewTimer = setTimeout(() => {
+				if (activePointer !== event.pointerId || dragged || focused) return;
+				const target = hitTarget(lastX, lastY) ?? initialTarget;
+				if (!target || (target === 'coffee' && coffee?.active)) return;
+				touchPreview = true;
+				setHovered(target);
+			}, 350);
 		}
 	};
 	const onPointerMove = (event: PointerEvent) => {
-		if (panning) {
-			const previousX = touchPoints.get(event.pointerId);
-			if (previousX === undefined) return;
-			touchPoints.set(event.pointerId, event.clientX);
-			if (touchPoints.size === 2) panOverviewBy((previousX - event.clientX) * 0.0015);
+		const previous = touchPoints.get(event.pointerId);
+		const { clientX, clientY } = event;
+		if (previous) touchPoints.set(event.pointerId, { x: clientX, y: clientY });
+		if (multiTouch) {
+			if (!previous || touchPoints.size !== 2) return;
+			if (multiTouch === 'desk') panOverviewBy((previous.x - clientX) * 0.0015);
+			else {
+				const other = [...touchPoints].find(([id]) => id !== event.pointerId)?.[1];
+				if (!other) return;
+				const oldDistance = Math.hypot(previous.x - other.x, previous.y - other.y);
+				const distance = Math.hypot(clientX - other.x, clientY - other.y);
+				if (oldDistance > 0) {
+					zoomPaper(
+						distance / oldDistance,
+						(clientX + other.x) / 2,
+						(clientY + other.y) / 2,
+						(clientX - previous.x) / 2,
+						(clientY - previous.y) / 2
+					);
+				}
+			}
 			return;
 		}
 		if (dragMode) {
 			if (activePointer !== event.pointerId) return;
-			if (Math.hypot(event.clientX - startX, event.clientY - startY) > 5) dragged = true;
+			const dragThreshold = event.pointerType === 'touch' ? 14 : 5;
+			if (Math.hypot(clientX - startX, clientY - startY) > dragThreshold) dragged = true;
 			if (dragged) {
 				clearTouchPreview();
 				const dx = event.clientX - lastX;
 				const dy = event.clientY - lastY;
-				if (dragMode === 'foreground') {
+				if (focused === 'printer' && paperView.zoom > 1) zoomPaper(1, clientX, clientY, dx, dy);
+				else if (dragMode === 'foreground') {
 					foregroundRotation.y += dx * 0.012;
 					foregroundRotation.x = THREE.MathUtils.clamp(
 						foregroundRotation.x + dy * 0.008,
@@ -633,10 +691,11 @@ export function createPortfolioScene(
 		const target = hitTarget(event.clientX, event.clientY);
 		if (event.pointerType === 'mouse')
 			cursorOffset.set(pointer.x * CAMERA.cursorYaw, -pointer.y * CAMERA.cursorPitch);
-		updateHover(target, event.clientX, event.clientY);
+		updateHover(target === 'coffee' && coffee?.active ? null : target, clientX, clientY);
 	};
 	const onPointerUp = (event: PointerEvent) => {
-		if (finishPanPointer(event.pointerId)) return;
+		if (navigator.userActivation?.isActive) void deskSound.unlock();
+		if (finishTouchPointer(event.pointerId)) return;
 		if (!dragMode || activePointer !== event.pointerId) return;
 		const mode = dragMode;
 		endDrag();
@@ -661,14 +720,18 @@ export function createPortfolioScene(
 		else if (!dragged && target === 'lamp')
 			setDarkMode(!darkMode, { playSound: true, manual: true });
 		else if (!dragged && target === 'headphones') {
-			soundEnabled = !soundEnabled;
+			setSoundEnabled(!soundEnabled);
 			onSoundChange(soundEnabled);
-		} else if (!dragged && target === 'coffee') coffee?.sip(cameraWorld);
+		} else if (!dragged && target === 'coffee' && coffee?.sip(cameraWorld)) setHovered(null);
 		if (!focused && event.pointerType !== 'touch')
-			updateHover(target, event.clientX, event.clientY);
+			updateHover(
+				target === 'coffee' && coffee?.active ? null : target,
+				event.clientX,
+				event.clientY
+			);
 	};
 	const onPointerCancel = (event: PointerEvent) => {
-		if (finishPanPointer(event.pointerId) || activePointer !== event.pointerId) return;
+		if (finishTouchPointer(event.pointerId) || activePointer !== event.pointerId) return;
 		clearTouchPreview();
 		endDrag();
 		cursorOffset.set(0, 0);
@@ -702,6 +765,8 @@ export function createPortfolioScene(
 	canvas.addEventListener('pointerup', onPointerUp);
 	canvas.addEventListener('pointercancel', onPointerCancel);
 	canvas.addEventListener('pointerleave', onPointerLeave);
+	canvas.addEventListener('contextmenu', onContextMenu);
+	canvas.addEventListener('wheel', onWheel, { passive: false });
 	canvas.addEventListener('webglcontextrestored', onContextRestored);
 	const resizeObserver = new ResizeObserver(onResize);
 	resizeObserver.observe(container);
@@ -888,7 +953,10 @@ export function createPortfolioScene(
 				propPopGroups.push(group);
 				if (object === lamp) lampPopGroup = group;
 				if (object === mug && coffeeFluid)
-					coffee = createCoffeeInteraction(group, coffeeFluid, reducedMotion);
+					coffee = createCoffeeInteraction(group, coffeeFluid, reducedMotion, {
+						onDrink: () => void deskSound.play('sip', Boolean(navigator.userActivation?.isActive)),
+						onSetDown: () => void deskSound.play('cup-down')
+					});
 				pop.add(group, 250 + index * 30, 500);
 			}
 			laptopStartY = laptop.position.y;
@@ -899,6 +967,7 @@ export function createPortfolioScene(
 			standStartY = headphoneStand.position.y;
 			cardHolderStartY = cardHolder.position.y;
 			printerStartY = printer?.position.y ?? 0;
+			mugStartY = mug?.position.y ?? 0;
 			lampLightStartY = lampLight.position.y;
 			pop.start();
 		})
@@ -925,6 +994,14 @@ export function createPortfolioScene(
 			if (group === lampPopGroup) lampPop = scale;
 		}
 		coffee?.update(now);
+		if (mug && coffee) {
+			coffeeLift = THREE.MathUtils.lerp(
+				coffeeLift,
+				hovered === 'coffee' && !coffee.active && !focused ? 0.012 : 0,
+				liftEase
+			);
+			mug.position.y = mugStartY + coffeeLift;
+		}
 		if (lamp) {
 			lampLift = THREE.MathUtils.lerp(
 				lampLift,
@@ -991,9 +1068,9 @@ export function createPortfolioScene(
 			: smoothstep((now - themeStarted) / CAMERA.themeDuration);
 		themeAmount = THREE.MathUtils.lerp(themeFrom, darkMode ? 1 : 0, themeProgress);
 		background.copy(lightBackground).lerp(darkBackground, themeAmount);
-		ambientLight.intensity = THREE.MathUtils.lerp(0.85, 0.6, themeAmount);
-		keyLight.intensity = THREE.MathUtils.lerp(0.35, 0.65, themeAmount);
-		daylight.intensity = THREE.MathUtils.lerp(1.5, 0, themeAmount);
+		ambientLight.intensity = THREE.MathUtils.lerp(dayLighting.ambient, 0.6, themeAmount);
+		keyLight.intensity = THREE.MathUtils.lerp(dayLighting.fill, 0.65, themeAmount);
+		daylight.intensity = THREE.MathUtils.lerp(dayLighting.sunlight, 0, themeAmount);
 		lampLight.intensity = 1.2 * themeAmount * Math.min(lampPop, 1);
 		if (lampBulbMaterial) lampBulbMaterial.emissiveIntensity = 1.6 * themeAmount;
 		if (laptop && screenMesh) {
@@ -1101,12 +1178,19 @@ export function createPortfolioScene(
 				activePresentation.motion.update(
 					presentationAmount,
 					camera,
-					foregroundQuaternion.setFromEuler(foregroundRotation)
+					foregroundQuaternion.setFromEuler(foregroundRotation),
+					activePresentation.target === 'printer' ? paperView : undefined
 				);
 				foregroundReady = opening && presentationAmount === 1;
-				if (!opening && presentationAmount === 0) activePresentation = undefined;
+				if (!opening && presentationAmount === 0) {
+					if (presentationFrom >= 0.1)
+						void deskSound.play(
+							activePresentation.target === 'printer' ? 'paper-down' : 'card-down'
+						);
+					activePresentation = undefined;
+				}
 			}
-			daylight.position.set(cameraWorld.x - 0.25, cameraWorld.y + 0.7, cameraWorld.z + 0.4);
+			daylight.position.set(cameraWorld.x - 0.8, cameraWorld.y + 0.82, cameraWorld.z + 0.2);
 			if (tooltipAnchor === 'lamp') {
 				tooltipPosition.copy(lampAnchor);
 				tooltipPosition.y += lampLift;
@@ -1163,7 +1247,8 @@ export function createPortfolioScene(
 				near(lampLift) &&
 				near(headphonesLift) &&
 				near(cardHolderLift) &&
-				near(printerLift);
+				near(printerLift) &&
+				near(coffeeLift);
 			const cameraSettled =
 				focused !== 'laptop' ||
 				(near(yaw.rotation.y) &&
@@ -1224,7 +1309,7 @@ export function createPortfolioScene(
 			return path;
 		},
 		setDarkMode,
-		setSoundEnabled: (value) => (soundEnabled = value),
+		setSoundEnabled,
 		exitFocus: () => {
 			focusRequested = null;
 			setFocused(null);
@@ -1243,9 +1328,11 @@ export function createPortfolioScene(
 			canvas.removeEventListener('pointerup', onPointerUp);
 			canvas.removeEventListener('pointercancel', onPointerCancel);
 			canvas.removeEventListener('pointerleave', onPointerLeave);
+			canvas.removeEventListener('contextmenu', onContextMenu);
+			canvas.removeEventListener('wheel', onWheel);
 			canvas.removeEventListener('webglcontextrestored', onContextRestored);
 			if (desk) disposeModel(desk);
-			lampSound.dispose();
+			deskSound.dispose();
 			lampLight.shadow.dispose();
 			daylight.shadow.dispose();
 			renderer.dispose();

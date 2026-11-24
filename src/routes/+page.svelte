@@ -17,6 +17,7 @@
 	import SceneTooltip from '#lib/components/SceneTooltip.svelte';
 	import SceneControls from '#lib/components/SceneControls.svelte';
 	import SceneObjectControls from '#lib/components/SceneObjectControls.svelte';
+	import { animateControlPress } from '#lib/components/animateControlPress.js';
 	import ContactCard from '#lib/components/ContactCard.svelte';
 	import { readSoundEnabled, saveSoundEnabled, soundStorageKey } from '#lib/sound.js';
 	import {
@@ -58,11 +59,16 @@
 	let foregroundMaskPath = $state('');
 	let focusHistory: Promise<void> | undefined;
 	let returningToDesk = false;
+	let returnTimeout: ReturnType<typeof setTimeout> | undefined;
 
 	$effect(() => {
 		const target = page.state.deskFocus;
 		const currentScene = scene;
 		untrack(() => {
+			if (returningToDesk) {
+				if (!target) finishDeskReturn();
+				return;
+			}
 			if (target) currentScene?.enterFocus(target);
 			else currentScene?.exitFocus();
 		});
@@ -95,25 +101,50 @@
 		scene?.setSoundEnabled(soundEnabled);
 	}
 
+	function writeDeskHistory(target: FocusTarget | undefined, replace = false) {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- Reuse the current base-aware URL.
+		return goto(page.url.href, {
+			shallow: true,
+			replace,
+			state: { ...page.state, deskFocus: target }
+		}).catch((error: unknown) => console.error('Could not save desk focus in history', error));
+	}
+
 	function updateFocus(value: FocusTarget | null) {
 		focused = value;
 		closeupReady = false;
+		if (value && !returningToDesk && page.state.deskFocus !== value)
+			focusHistory = writeDeskHistory(value, Boolean(page.state.deskFocus));
+	}
+
+	function finishDeskReturn() {
+		clearTimeout(returnTimeout);
+		returnTimeout = undefined;
 		returningToDesk = false;
-		if (value && page.state.deskFocus !== value) {
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- Reuse the current base-aware URL.
-			focusHistory = goto(page.url.href, {
-				shallow: true,
-				state: { ...page.state, deskFocus: value }
-			}).catch((error: unknown) => console.error('Could not save desk focus in history', error));
-		}
+		if (focused && page.state.deskFocus !== focused)
+			focusHistory = writeDeskHistory(focused, Boolean(page.state.deskFocus));
 	}
 
 	async function exitToDesk() {
-		if (!focused || returningToDesk) return;
+		if (!focused) return;
+		if (returningToDesk) {
+			scene?.exitFocus();
+			return;
+		}
 		returningToDesk = true;
+		scene?.exitFocus();
+		// The scene can close even if the browser skips or delays this shallow entry.
+		returnTimeout = setTimeout(() => {
+			if (page.state.deskFocus) {
+				void writeDeskHistory(undefined, true).then(() => {
+					if (returningToDesk) finishDeskReturn();
+				});
+			} else finishDeskReturn();
+		}, 450);
 		await focusHistory;
+		if (!returningToDesk) return;
 		if (page.state.deskFocus) history.back();
-		else scene?.exitFocus();
+		else finishDeskReturn();
 	}
 
 	function syncScreen(target: ScreenTarget, iframe: HTMLIFrameElement | undefined) {
@@ -226,6 +257,7 @@
 			});
 		return () => {
 			cancelled = true;
+			clearTimeout(returnTimeout);
 			clearInterval(themeTimer);
 			viewport.removeEventListener('change', updatePreferredDevice);
 			window.removeEventListener('storage', onStorage);
@@ -253,7 +285,7 @@
 	<div bind:this={container} class="absolute inset-0">
 		<canvas
 			bind:this={canvas}
-			class="block h-full w-full touch-none"
+			class="block h-full w-full touch-none select-none [-webkit-touch-callout:none]"
 			aria-label="Interactive 3D desk with a laptop, phone, embedded display, lamp, and printer"
 		></canvas>
 	</div>
@@ -286,6 +318,7 @@
 					<!-- eslint-disable svelte/no-navigation-without-resolve -->
 					<a
 						href={cvUrl}
+						use:animateControlPress
 						download="ChrisLouwerseCV.pdf"
 						class={`pointer-events-auto flex items-center justify-center gap-1 rounded-xl border px-2 text-sm font-semibold whitespace-nowrap shadow-lg transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 sm:gap-1.5 sm:px-3 ${darkMode ? 'border-blue-300/25 bg-[#10264a]/95 text-white hover:bg-[#1d3c69]' : 'border-blue-200 bg-white/95 text-[#10223d] hover:bg-blue-50'}`}
 					>

@@ -11,24 +11,35 @@
 
 	let {
 		app,
+		origin,
 		projected,
 		darkMode,
 		language,
 		maximized,
+		onNavigate,
 		onMaximizedChange,
 		onClose,
 		onMinimize
 	}: {
 		app: PortfolioAppId;
+		origin: PortfolioAppId;
 		projected: boolean;
 		darkMode: boolean;
 		language: Language;
 		maximized: boolean;
+		onNavigate: (page: PortfolioAppId) => void;
 		onMaximizedChange: (value: boolean) => void;
 		onClose: () => void;
 		onMinimize: () => void;
 	} = $props();
 	let t = $derived(copy[language]);
+	let scrollTop = $state(0);
+
+	function navigate(page: PortfolioAppId) {
+		scrollTop = 0;
+		onNavigate(page);
+	}
+
 	function centeredRect(): Rectangle {
 		const width = Math.min(740, Math.max(Math.min(420, window.innerWidth), window.innerWidth - 40));
 		const height = Math.min(520, Math.max(280, window.innerHeight - 88));
@@ -105,7 +116,7 @@
 <svelte:window onresize={() => (rect = keepTitlebarInFrame(rect))} />
 
 <section
-	transition:windowToIcon={{ iconId: app }}
+	transition:windowToIcon|global={{ iconId: origin }}
 	class={`portfolio-window absolute z-40 flex flex-col overflow-hidden shadow-2xl ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${gesture ? 'transition-none' : 'transition-[left,top,width,height,border-radius,background-color,color] duration-[380ms]'} ${maximized ? 'rounded-none' : 'rounded-xl'} ${darkMode ? 'bg-[#0c1d35] text-slate-50' : 'bg-white text-[#10223d]'}`}
 	class:maximized
 	style={`left:${maximized ? 0 : rect.x}px;top:${maximized ? 0 : rect.y}px;width:${maximized ? '100vw' : `${rect.width}px`};height:${maximized ? 'calc(100vh - 3rem)' : `${rect.height}px`};`}
@@ -202,7 +213,7 @@
 		</div>
 	</header>
 
-	<PortfolioApp {app} {language} {projected} />
+	<PortfolioApp {app} {language} {projected} onNavigate={navigate} bind:scrollTop />
 
 	{#if !maximized}
 		{#each ['t', 'b', 'l', 'r', 'tl', 'tr', 'bl', 'br'] as edge (edge)}

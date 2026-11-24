@@ -3,10 +3,10 @@ import type { TransitionConfig } from 'svelte/transition';
 
 /** Expand an app window from its desktop icon and shrink it back on close. */
 export function windowToIcon(node: HTMLElement, { iconId }: { iconId: string }): TransitionConfig {
-	const icon = [...document.querySelectorAll<HTMLElement>('[data-desktop-icon]')].find(
+	const icon = [...node.ownerDocument.querySelectorAll<HTMLElement>('[data-desktop-icon]')].find(
 		(element) => element.dataset.desktopIcon === iconId
 	);
-	const from = icon?.getBoundingClientRect();
+	const from = (icon?.querySelector('svg')?.parentElement ?? icon)?.getBoundingClientRect();
 	const to = node.getBoundingClientRect();
 	const offsetX = from ? from.left - to.left : 0;
 	const offsetY = from ? from.top - to.top : 0;
